@@ -1,0 +1,31 @@
+num_classes: 27
+
+model:
+  pretrained:
+    model_type: "vit_small"
+    dino_patch_size: 8
+    freeze_backbone: true
+    drop_prob: 0.1
+    pretrained_weights: null
+  enc_num_blocks: 3
+  dec_num_blocks: 3
+  vq:
+    vq_type: "ema"
+    num_codebooks: [1024, 1024, 1024]
+    embed_dims: [64, 128, 256]
+    beta: 0.25
+    normalize: "l2"  # l2, z_norm, z_trainable, none
+    decay: 0.99
+    eps: 1.0e-5
+
+wandb:
+  mode : "online"
+
+loss:
+  recon_weight: 1.0
+  vq_weight: 1.0
+
+
+eval:
+  output_type: "vq0"
+  extra_classes : 0

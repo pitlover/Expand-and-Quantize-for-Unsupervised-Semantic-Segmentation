@@ -30,7 +30,7 @@ model:
     num_codebooks: [ 512, 512, 512 ]
     embed_dims: [ 128, 256, 384 ]
     beta: 0.25
-    normalize: "z_norm"  # l2, z_norm, z_trainable, none
+    normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_gumbel: true
     decay: 0.95
@@ -89,7 +89,7 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "vq0"
+  output_type: "vq2"
   extra_classes: 0
 
 # ---------------------------------------------------------------- #

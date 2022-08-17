@@ -27,10 +27,10 @@ model:
   dec_num_blocks: 3
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 512, 512, 512 ]
+    num_code      books: [ 512, 512, 512 ]
     embed_dims: [ 128, 256, 384 ]
     beta: 0.25
-    normalize: "z_norm"  # l2, z_norm, z_trainable, none
+    normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_gumbel: true
     decay: 0.95

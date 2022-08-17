@@ -28,8 +28,14 @@ class DINOUnSeg(nn.Module):
         vq_embed_dims = cfg["vq"]["embed_dims"]
         assert len(vq_num_codebooks) == len(vq_embed_dims)
         self.num_vq = len(vq_num_codebooks)
+        self.beta = cfg["vq"]["beta"]
+        self.normalize = cfg["vq"]["normalize"]
         self.vq_type = cfg["vq"]["vq_type"]
-        vq_kwargs = dict(beta=cfg["vq"]["beta"], normalize=cfg["vq"]["normalize"])
+        self.use_restart = cfg["vq"].get("use_restart", False)
+        self.use_gumbel = cfg["vq"].get("use_gumbel", False)
+
+        vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
+                         use_restart=self.use_restart, use_gumbel=self.use_gumbel)
 
         if self.vq_type == "ema":
             vq_kwargs["decay"] = cfg["vq"]["decay"]
@@ -82,15 +88,19 @@ class DINOUnSeg(nn.Module):
         for i in range(self.num_vq):
 
             feat_i = self.vq_input_proj[i](feat)
+            # print(f"feat_i {i}", feat_i.shape)
             feat_vq_i, vq_i_output = self.vq_blocks[i](feat_i)
+            # print(f"feat_vq_i {i}", feat_vq_i.shape)
             feat_vqs.append(feat_vq_i)
 
             for k, v in vq_i_output.items():
                 output[f"vq{i}-{k}"] = v
 
             if i < self.num_vq - 1:
-                feat_i = torch.cat([feat_i, feat_vq_i], dim=1)
+                feat_i = torch.cat([feat, feat_vq_i], dim=1)
+                # print(f"feat_i concat {i}", feat_i.shape)
                 feat = self.vq_output_proj[i](feat_i)
+                # print(f"feat output {i}", feat.shape)
 
         feat = torch.cat(feat_vqs, dim=1)
         feat = self.vq_concat_proj(feat)  # (b, 384, 28, 28)
@@ -101,3 +111,7 @@ class DINOUnSeg(nn.Module):
         output["recon-loss"] = recon_loss
 
         return feat, feat_vqs, output
+
+    def restart(self):
+        for i in range(self.num_vq):
+            self.vq_blocks[i].restart()

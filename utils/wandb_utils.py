@@ -3,7 +3,7 @@ import os
 import platform
 import wandb
 
-from dist_utils import is_master, broadcast_objects, is_distributed_set
+from .dist_utils import is_master, broadcast_objects, is_distributed_set
 
 __all__ = ["set_wandb"]
 
@@ -26,8 +26,8 @@ def set_wandb(cfg: Dict, force_mode: Optional[str] = None) -> Optional[str]:
     if is_master():  # wandb init only at master
         os.makedirs(save_dir, exist_ok=True)
 
-        wandb_project = cfg["project"]
-        wandb_name = cfg["name"]
+        wandb_project = cfg["wandb"]["project"]
+        wandb_name = cfg["wandb"]["name"]
 
         wandb_note = cfg["wandb"]["notes"] if ("notes" in cfg["wandb"]) else None
         wandb_id = cfg["wandb"]["id"] if ("id" in cfg["wandb"]) else None

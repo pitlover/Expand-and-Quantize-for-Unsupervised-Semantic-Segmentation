@@ -3,7 +3,7 @@ wandb:
   project: "Jigmentation"
   mode: "online"
   name: "HIHI_ema"
-  notes: null
+  notes: "dropoutX, bnX, kernel-1"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -23,6 +23,7 @@ model:
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
+    dropout: False
   enc_num_blocks: 3
   dec_num_blocks: 3
   vq:
@@ -62,7 +63,7 @@ dataloader:
     batch_size: 64  # total
     num_workers: 4  # total
   val:
-    batch_size: 32  # total
+    batch_size: 16  # total
     num_workers: 2  # total
 
 # ---------------------------------------------------------------- #

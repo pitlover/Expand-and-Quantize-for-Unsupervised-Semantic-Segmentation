@@ -388,7 +388,7 @@ class EMAVectorQuantizer(nn.Module):
         loss = self.beta * commitment_loss
 
         output["loss"] = loss
-        output["commitment_loss"] = commitment_loss
+        output["commitment-loss"] = commitment_loss
 
         # preserve gradients
         z_quantized = z_flat + (z_quantized - z_flat).detach()  # (n, d)

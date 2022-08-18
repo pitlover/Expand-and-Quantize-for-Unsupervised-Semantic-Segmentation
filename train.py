@@ -53,6 +53,8 @@ def train_epoch(
     backward_time = 0.0
     step_time = 0.0
 
+    best_iter = best_epoch = 0
+
     data_start_time = time.time()
     for it, data in enumerate(train_dataloader):
 
@@ -144,6 +146,8 @@ def train_epoch(
                     s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']} ->  {linear_result['accuracy'].item()}"
                     print(s)
 
+                    best_iter = current_iter
+                    best_epoch = current_epoch
                     best_metric["Cluster_mIoU"] = cluster_result["iou"].item()
                     best_metric["Cluster_Accuracy"] = cluster_result["accuracy"].item()
                     best_metric["Linear_mIoU"] = linear_result["iou"].item()
@@ -159,6 +163,7 @@ def train_epoch(
                 else:
                     s = time_log()
                     s += f"Valid NOT updated ...\n"
+                    s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"
                     s += f"... Cluster mIou: {best_metric['Cluster_mIoU']} (best) vs {cluster_result['iou'].item()}\n"
                     s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']} (best) vs {cluster_result['accuracy'].item()}\n"
                     s += f"... Linear mIou: {best_metric['Linear_mIoU']} (best) vs {linear_result['iou'].item()}\n"

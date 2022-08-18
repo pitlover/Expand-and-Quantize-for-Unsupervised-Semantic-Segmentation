@@ -21,6 +21,7 @@ class DinoFeaturizer(nn.Module):
         self.backbone.eval()
 
         drop_prob = cfg.get("drop_prob", 0.1)
+        self.is_dropout = cfg["dropout"]
         self.dropout = torch.nn.Dropout2d(p=drop_prob)
 
         if arch == "vit_small" and patch_size == 16:
@@ -77,6 +78,7 @@ class DinoFeaturizer(nn.Module):
 
         feat = feat[0]  # (b, 1+28x28, 384)
         feat = feat[:, 1:, :].reshape(b, feat_h, feat_w, -1).permute(0, 3, 1, 2).contiguous()  # (b, 384, 28, 28)
-        feat = self.dropout(feat)
+        if self.is_dropout:
+            feat = self.dropous(feat)
 
         return feat

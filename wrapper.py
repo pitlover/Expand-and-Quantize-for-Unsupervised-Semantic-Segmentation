@@ -47,7 +47,7 @@ class DINOUnSegWrapper(nn.Module):
         feat, feat_vqs, output = self.model(img)
         # feat: (b, 384, 28, 28)
         # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
-        # output: {vq0-current-p10/50/90, vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
+        # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
 
         model_loss = output["recon-loss"] * self.recon_weight
 

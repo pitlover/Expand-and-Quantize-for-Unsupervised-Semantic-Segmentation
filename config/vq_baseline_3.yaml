@@ -3,7 +3,7 @@ wandb:
   project: "Jigmentation"
   mode: "online"
   name: "HIHI_ema"
-  notes: "dropoutX, bnX, kernel-1"
+  notes: "dropoutX, bn->ln, kernel-1, num_resblock-1"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -24,8 +24,8 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: False
-  enc_num_blocks: 3
-  dec_num_blocks: 3
+  enc_num_blocks: 1
+  dec_num_blocks: 1
   vq:
     vq_type: "ema"  # ema, param
     num_codebooks: [ 512, 512, 512 ]
@@ -60,7 +60,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
+    batch_size: 128  # total
     num_workers: 4  # total
   val:
     batch_size: 16  # total
@@ -90,7 +90,7 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "vq2"
+  output_type: "vq0"
   extra_classes: 0
 
 # ---------------------------------------------------------------- #

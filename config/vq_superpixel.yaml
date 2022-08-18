@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI_ema"
+  name: "HIHI_superpixel"
   notes: null
 
 # ---------------------------------------------------------------- #
@@ -23,16 +23,16 @@ model:
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
-  enc_num_blocks: 3
-  dec_num_blocks: 3
+  enc_num_blocks: 6
+  dec_num_blocks: 6
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 512, 512, 512 ]
-    embed_dims: [ 128, 256, 384 ]
+    num_codebooks: [ 2048, 2048, 2048 ]
+    embed_dims: [ 384, 384, 384 ]
     beta: 0.25
-    normalize: "z_norm"  # l2, z_norm, z_trainable, none
+    normalize: "none"  # l2, z_norm, z_trainable, none
     use_restart: false
-    use_gumbel: true
+    use_gumbel: false
     decay: 0.95
     eps: 1.0e-5
 
@@ -59,7 +59,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 64  # total
     num_workers: 4  # total
   val:
     batch_size: 32  # total

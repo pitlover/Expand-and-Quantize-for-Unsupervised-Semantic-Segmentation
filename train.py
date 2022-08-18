@@ -16,8 +16,8 @@ from utils.dist_utils import all_reduce_dict
 from utils.print_utils import time_log
 from utils.param_utils import count_params, compute_param_norm
 
-from build import build_dataset, build_dataloader, build_optimizer, build_scheduler, split_params_for_optimizer
-from model.dino_unseg import DINOUnSeg
+from build import build_dataset, build_dataloader, build_model, build_optimizer, build_scheduler, \
+    split_params_for_optimizer
 from model.metric import UnSegMetrics
 from wrapper import DINOUnSegWrapper
 
@@ -116,7 +116,7 @@ def train_epoch(
             s += f"... LR: {lr:.6f}\n"
             s += f"... grad/param norm: {grad_norm.item():.3f} / {param_norm.item():.3f}\n"
             s += f"... batch_size x num_accum x gpus = " \
-                 f"{int(label.shape[0])} x {num_accum} x {get_world_size()}\n"
+                 f"{int(label.shape[0])} x {num_accum} x {get_world_size()} = {int(label.shape[0]) * num_accum * get_world_size()}\n"
             s += f"... data/fwd/bwd/step time: " \
                  f"{data_time:.3f} / {forward_time:.3f} / {backward_time:.3f} / {step_time:.3f}"
 
@@ -126,7 +126,7 @@ def train_epoch(
                     "grad_norm": grad_norm.item(),
                     "param_norm": param_norm.item(),
                     "lr": lr,
-                    "iterations": current_iter,
+                    "iters": current_iter,
                 }
                 for k, v in output.items():
                     log_dict[k] = v.item() if isinstance(v, torch.Tensor) else v
@@ -140,9 +140,10 @@ def train_epoch(
                 if best_metric["Cluster_mIoU"] <= cluster_result["iou"].item():
                     s = time_log()
                     s += f"Valid updated!\n"
-                    s += f"... Cluster mIou: {best_metric['Cluster_mIoU']} ->  {cluster_result['iou'].item()}\n"
+                    s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"
+                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']} ->  {cluster_result['iou'].item()}\n"
                     s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']} ->  {cluster_result['accuracy'].item()}\n"
-                    s += f"... Linear mIou: {best_metric['Linear_mIoU']} ->  {linear_result['iou'].item()}\n"
+                    s += f"... Linear mIoU: {best_metric['Linear_mIoU']} ->  {linear_result['iou'].item()}\n"
                     s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']} ->  {linear_result['accuracy'].item()}"
                     print(s)
 
@@ -164,9 +165,9 @@ def train_epoch(
                     s = time_log()
                     s += f"Valid NOT updated ...\n"
                     s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"
-                    s += f"... Cluster mIou: {best_metric['Cluster_mIoU']} (best) vs {cluster_result['iou'].item()}\n"
+                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']} (best) vs {cluster_result['iou'].item()}\n"
                     s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']} (best) vs {cluster_result['accuracy'].item()}\n"
-                    s += f"... Linear mIou: {best_metric['Linear_mIoU']} (best) vs {linear_result['iou'].item()}\n"
+                    s += f"... Linear mIoU: {best_metric['Linear_mIoU']} (best) vs {linear_result['iou'].item()}\n"
                     s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']} (best) vs {linear_result['accuracy'].item()}"
                     print(s)
 
@@ -242,7 +243,7 @@ def valid_epoch(
 
         print(s)
         log_dict = {
-            "iterations": current_iter,
+            "iters": current_iter,
             "Cluster_mIoU": cluster_result['iou'].item(),
             "Cluster_Accuracy": cluster_result['accuracy'].item(),
             "Linear_mIoU": linear_result['iou'].item(),
@@ -278,7 +279,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
     # ======================================================================================== #
     # Model
     # ======================================================================================== #
-    model = DINOUnSeg(cfg["model"])
+    model = build_model(cfg["model"], name=cfg["wandb"]["name"].lower())
     model = DINOUnSegWrapper(cfg, model)
     model = model.to(device)
     if is_distributed_set():

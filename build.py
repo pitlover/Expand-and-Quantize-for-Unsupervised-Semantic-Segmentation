@@ -1,3 +1,4 @@
+import torch.nn as nn
 from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR
 from torch.utils.data.dataloader import DataLoader
@@ -6,6 +7,19 @@ from torch.utils.data.distributed import DistributedSampler
 from utils.dist_utils import is_distributed_set, get_rank, get_world_size
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer, EmbeddingEMA
 from data.dataset import UnSegDataset
+
+from model.dino_unseg import DINOUnSeg
+
+
+def build_model(cfg: dict,
+                name: str) -> nn.Module:
+    # cfg["model"]
+    if "HIHI" in name:
+        model = DINOUnSeg(cfg)
+    else:
+        raise ValueError(f"Unsupported type {name}.")
+
+    return model
 
 
 def split_params_for_optimizer(model):

@@ -13,11 +13,13 @@ class ResBlock(nn.Module):
 
         # self.bn1 = nn.BatchNorm2d(in_channel) # TODO maybe layernorm
         self.act1 = nn.ReLU(inplace=True)
-        self.conv1 = nn.Conv2d(in_channel, in_channel, 1, 1, 1, bias=False)
+        # self.conv1 = nn.Conv2d(in_channel, in_channel, 3, 1, 1, bias=False)
+        self.conv1 = nn.Conv2d(in_channel, in_channel, 1, 1, 0, bias=False)
 
         # self.bn2 = nn.BatchNorm2d(in_channel)
         self.act2 = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(in_channel, out_channel, 1, 1, 1, bias=True)
+        # self.conv2 = nn.Conv2d(in_channel, out_channel, 3, 1, 1, bias=True)
+        self.conv2 = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=True)
 
         if in_channel != out_channel:
             # self.bn_shortcut = nn.BatchNorm2d(in_channel)
@@ -27,8 +29,7 @@ class ResBlock(nn.Module):
             self.conv_shortcut = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        identity = x
-
+        identity = x  # (b, c, h, w)
         # x = self.bn1(x)
         x = self.act1(x)
         x = self.conv1(x)
@@ -40,6 +41,5 @@ class ResBlock(nn.Module):
         if self.conv_shortcut is not None:
             # identity = self.bn_shortcut(identity)
             identity = self.conv_shortcut(identity)
-
         x = x + identity
         return x

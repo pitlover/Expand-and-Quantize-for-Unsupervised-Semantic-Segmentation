@@ -24,12 +24,12 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: False
-  enc_num_blocks: 1
-  dec_num_blocks: 1
+  enc_num_blocks: 3
+  dec_num_blocks: 3
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 512, 512, 512 ]
-    embed_dims: [ 128, 256, 384 ]
+    num_codebooks: [ 1024, 1024, 1024 ]
+    embed_dims: [ 70, 70, 70 ]
     beta: 0.25
     normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false

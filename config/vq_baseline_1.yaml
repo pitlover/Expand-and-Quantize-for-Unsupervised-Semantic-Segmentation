@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI_ema"
-  notes: null
+  name: "HIHI1"
+  notes: "enc_dec_1, ln, two-stage"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -23,14 +23,15 @@ model:
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
+    dropout: false
   enc_num_blocks: 3
   dec_num_blocks: 3
   vq:
     vq_type: "ema"  # ema, param
-    num_code      books: [ 512, 512, 512 ]
-    embed_dims: [ 128, 256, 384 ]
+    num_codebooks: [ 1024, 1024 ]
+    embed_dims: [ 384, 384 ]
     beta: 0.25
-    normalize: "l2"  # l2, z_norm, z_trainable, none
+    normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_gumbel: true
     decay: 0.95
@@ -60,10 +61,10 @@ dataset:
 dataloader:
   train:
     batch_size: 64  # total
-    num_workers: 4  # total
+    num_workers: 8  # total
   val:
     batch_size: 32  # total
-    num_workers: 2  # total
+    num_workers: 4  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
@@ -81,11 +82,11 @@ optimizer:
 # ---------------------------------------------------------------- #
 scheduler:
   model:
-    name: "constant"
+    name: "cos"
   cluster:
-    name: "constant"
+    name: "cos"
   linear:
-    name: "constant"
+    name: "cos"
 
 # ---------------------------------------------------------------- #
 eval:

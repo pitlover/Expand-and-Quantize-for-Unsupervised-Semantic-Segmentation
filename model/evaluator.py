@@ -21,7 +21,7 @@ class UnSegEvaluator(nn.Module):
         self.linear_probe = nn.Conv2d(embed_dim, num_classes, kernel_size=1, stride=1)
         self.cluster_probe = ClusterLookup(embed_dim, num_classes + extra_classes)
 
-    def forward_linear(self, feat: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
+    def forward_linear(self, feat: torch.Tensor, label: torch.Tensor) -> torch.Tensor:  # TODO why not use?
         """
         :param feat:        (batch_size, 384, 28, 28)
         :param label:       (batch_size, 224, 224)
@@ -37,6 +37,7 @@ class UnSegEvaluator(nn.Module):
         label_flat = label_flat[mask]
         logit_flat = logit_flat[mask]
         loss = F.cross_entropy(logit_flat, label_flat, reduction="mean")
+
         return loss
 
     def forward(self,
@@ -57,6 +58,7 @@ class UnSegEvaluator(nn.Module):
             cluster_preds = batched_crf(img, cluster_log_prob).argmax(1)
 
             linear_loss = torch.zeros_like(cluster_loss)  # 0
+
         else:
             assert label is not None
             linear_logits = self.linear_probe(out)

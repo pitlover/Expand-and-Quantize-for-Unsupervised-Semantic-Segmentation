@@ -39,7 +39,6 @@ class UnSegMetrics(object):
         """Accumulate confusion matrix."""
         preds = preds.view(-1)
         label = label.view(-1)
-
         mask = (label >= 0) & (label < self.num_classes) & (preds >= 0) & (preds < self.num_classes)
         preds = preds[mask]
         label = label[mask]

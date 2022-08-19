@@ -23,9 +23,9 @@ model:
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
-    dropout: False
-  enc_num_blocks: 1
-  dec_num_blocks: 1
+    dropout: false
+  enc_num_blocks: 3
+  dec_num_blocks: 3
   vq:
     vq_type: "ema"  # ema, param
     num_codebooks: [ 512, 512, 512 ]

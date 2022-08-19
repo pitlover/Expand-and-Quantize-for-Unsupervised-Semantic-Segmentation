@@ -33,8 +33,10 @@ def train_epoch(
         save_dir: str,
         current_epoch: int,
         current_iter: int,
-        best_metric: Dict[str, float]
-) -> Tuple[int, Dict[str, float]]:
+        best_metric: Dict[str, float],
+        best_epoch: int,
+        best_iter: int
+) -> Tuple[int, Dict[str, float], int, int]:
     # cfg = cfg
     model_m = model.module if isinstance(model, DistributedDataParallel) else model
     model_m: DINOUnSegWrapper
@@ -53,13 +55,10 @@ def train_epoch(
     backward_time = 0.0
     step_time = 0.0
 
-    best_iter = best_epoch = 0
-
     data_start_time = time.time()
     for it, data in enumerate(train_dataloader):
-
         s = time_log()
-        s += f"Current iter: {current_iter} (epoch {current_epoch}, " \
+        s += f"Current iter: {current_iter+1} (epoch {current_epoch}, " \
              f"epoch done: {it / len(train_dataloader) * 100:.2f} %)\n"
 
         # -------------------------------- data -------------------------------- #
@@ -106,7 +105,7 @@ def train_epoch(
 
         # -------------------------------- print -------------------------------- #
 
-        if (it > 0) and (it % print_interval == 0):
+        if (it + 1) % print_interval == 0:
             output = all_reduce_dict(output, op="mean")
             param_norm = compute_param_norm(model_m.model.parameters())
             lr = schedulers[0].get_last_lr()[0]
@@ -132,7 +131,7 @@ def train_epoch(
                     log_dict[k] = v.item() if isinstance(v, torch.Tensor) else v
                 wandb.log(log_dict)
 
-        if (it > 0) and (it % valid_interval == 0):
+        if (it + 1) % valid_interval == 0:
             _, cluster_result, linear_result = valid_epoch(
                 model, valid_dataloader, cfg, device, current_iter, is_crf=False)
 
@@ -175,8 +174,7 @@ def train_epoch(
             torch.set_grad_enabled(True)  # same as 'with torch.enable_grad():'
 
         data_start_time = time.time()
-
-    return current_iter, best_metric
+    return current_iter, best_metric, best_epoch, best_iter
 
 
 def valid_epoch(
@@ -213,8 +211,8 @@ def valid_epoch(
 
         # -------------------------------- loss -------------------------------- #
         _, output, (linear_preds, cluster_preds) = model(img, label, is_crf=is_crf)
-        cluster_m.update(cluster_preds, label)
-        linear_m.update(linear_preds, label)
+        cluster_m.update(cluster_preds.to(device), label)
+        linear_m.update(linear_preds.to(device), label)
 
         for k, v in output.items():
             if k not in result:
@@ -313,9 +311,12 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
     iter_per_epoch = len(train_dataloader)
     num_accum = cfg["train"].get("num_accum", 1)
-    model_scheduler = build_scheduler(cfg["scheduler"]["model"], model_optimizer, iter_per_epoch, num_accum)
-    cluster_scheduler = build_scheduler(cfg["scheduler"]["cluster"], cluster_optimizer, iter_per_epoch, num_accum)
-    linear_scheduler = build_scheduler(cfg["scheduler"]["linear"], linear_optimizer, iter_per_epoch, num_accum)
+    model_scheduler = build_scheduler(cfg["scheduler"]["model"], model_optimizer, iter_per_epoch, num_accum,
+                                      epoch=cfg["train"]["max_epochs"])
+    cluster_scheduler = build_scheduler(cfg["scheduler"]["cluster"], cluster_optimizer, iter_per_epoch, num_accum,
+                                        epoch=cfg["train"]["max_epochs"])
+    linear_scheduler = build_scheduler(cfg["scheduler"]["linear"], linear_optimizer, iter_per_epoch, num_accum,
+                                       epoch=cfg["train"]["max_epochs"])
 
     schedulers = [model_scheduler, cluster_scheduler, linear_scheduler]
 
@@ -342,7 +343,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
     current_epoch = 0
     current_iter = 0
-
+    best_iter = best_epoch = 0
     # -------- main loop -------- #
     while current_epoch < max_epochs:
         if is_master():
@@ -356,8 +357,10 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
         # -------- train body -------- #
         epoch_start_time = time.time()  # second
-        current_iter, best_metric = train_epoch(model, optimizers, schedulers, train_dataloader, valid_dataloader,
-                                                cfg, device, save_dir, current_epoch, current_iter, best_metric)
+        current_iter, best_metric, best_epoch, best_iter = train_epoch(model, optimizers, schedulers, train_dataloader,
+                                                                       valid_dataloader,
+                                                                       cfg, device, save_dir, current_epoch,
+                                                                       current_iter, best_metric, best_epoch, best_iter)
         epoch_time = time.time() - epoch_start_time
         if is_master():
             s = time_log()
@@ -369,16 +372,15 @@ def run(cfg: Dict, debug: bool = False) -> None:
         current_epoch += 1
 
     # -------- final evaluation -------- #
-    # TODO load best model
-
-    final_start_time = time.time()
     s = time_log()
+    best_checkpoint = torch.load(f"{save_dir}/best.pth", map_location=device)
+    model.load_state_dict(best_checkpoint['model'], strict=True)
+    final_start_time = time.time()
     s += "Final evaluation (before CRF)\n"
 
     _, cluster_result, linear_result = valid_epoch(model, valid_dataloader, cfg, device, current_iter, is_crf=False)
     s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
     s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
-
     s += "Final evaluation (after CRF)\n"
     _, cluster_result, linear_result = valid_epoch(model, valid_dataloader, cfg, device, current_iter, is_crf=True)
     s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
@@ -388,6 +390,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
     s += f"... time: {final_time:.3f} sec"
 
     if is_master():
+        print(s)
         wandb.finish()
 
 

@@ -14,7 +14,7 @@ from model.dino_unseg import DINOUnSeg
 def build_model(cfg: dict,
                 name: str) -> nn.Module:
     # cfg["model"]
-    if "HIHI" in name:
+    if "hihi" in name:
         model = DINOUnSeg(cfg)
     else:
         raise ValueError(f"Unsupported type {name}.")
@@ -73,7 +73,8 @@ def build_optimizer(cfg: dict, params):
 def build_scheduler(cfg: dict,
                     optimizer: SGD,
                     iter_per_epoch: int,
-                    num_accum: int = 1
+                    num_accum: int = 1,
+                    epoch: int = 10
                     ):
     # cfg = cfg["scheduler"]["model" / "cluster" / "linear"]
 
@@ -85,8 +86,9 @@ def build_scheduler(cfg: dict,
                                total_iters=0)
     elif (scheduler_type == "cos") or (scheduler_type == "cosine"):
         scheduler = CosineAnnealingLR(optimizer,
-                                      T_max=cfg["epochs"] * iter_per_epoch,
-                                      eta_min=cfg.get("min_lr", 0.0))
+                                      T_max=epoch * iter_per_epoch,
+                                      eta_min=cfg.get("min_lr", 0.0),
+                                      last_epoch=-1)
     else:
         raise ValueError(f"Unsupported scheduler type {scheduler_type}.")
     return scheduler

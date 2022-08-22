@@ -1,5 +1,6 @@
 from typing import Dict
 import numpy as np
+import torch.nn as nn
 from scipy.optimize import linear_sum_assignment
 import torch
 
@@ -8,12 +9,13 @@ from utils.dist_utils import all_reduce_tensor
 __all__ = ["UnSegMetrics"]
 
 
-class UnSegMetrics(object):
+class UnSegMetrics(nn.Module):
 
     def __init__(self,
                  num_classes: int,
                  extra_classes: int,
                  compute_hungarian: bool,
+                 device: torch.device
                  ) -> None:
         super().__init__()
 
@@ -24,7 +26,11 @@ class UnSegMetrics(object):
 
         self.compute_hungarian = compute_hungarian
         self.extra_classes = extra_classes
-        self.confusion_matrix = torch.zeros(num_classes + extra_classes, num_classes, dtype=torch.long)
+        self.device = device
+
+        self.register_buffer("confusion_matrix",
+                             torch.zeros(num_classes + extra_classes, num_classes, dtype=torch.long, device=device))
+        # self.confusion_matrix = torch.zeros(num_classes + extra_classes, num_classes, dtype=torch.long)
 
         self.assignments = None  # placeholder
         self.histogram = None  # placeholder
@@ -47,7 +53,7 @@ class UnSegMetrics(object):
             label * (self.num_classes + self.extra_classes) + preds,  # row: label, colum: pred,
             minlength=self.num_classes * (self.num_classes + self.extra_classes)
         )
-        confusion = confusion.reshape(self.num_classes, self.num_classes + self.extra_classes).t().cpu()
+        confusion = confusion.reshape(self.num_classes, self.num_classes + self.extra_classes).t()
         self.confusion_matrix += confusion
 
     @torch.no_grad()
@@ -56,7 +62,7 @@ class UnSegMetrics(object):
         self.confusion_matrix = all_reduce_tensor(self.confusion_matrix, op="sum")
 
         if self.compute_hungarian:  # cluster
-            self.assignments = linear_sum_assignment(self.confusion_matrix, maximize=True)
+            self.assignments = linear_sum_assignment(self.confusion_matrix.cpu(), maximize=True)
             # the output of 'linear_sum_assignment':
             # (row_indices,)  ex) [0, 3, 1, 2, 4]
             # (column_indices)  ex) [3, 4, 1, 0, 2]

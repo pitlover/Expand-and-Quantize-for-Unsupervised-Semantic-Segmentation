@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI_ema"
-  notes: "dropoutX, bn->ln, kernel-1, num_resblock-1, clip-10"
+  name: "HIHI2_weighted_sum_ts0.2"
+  notes: "dropoutX, bn->ln, kernel-1, num_resblock-1"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -23,13 +23,13 @@ model:
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
-    dropout: False
+    dropout: false
   enc_num_blocks: 3
   dec_num_blocks: 3
   vq:
     vq_type: "ema"  # ema, param
     num_codebooks: [ 1024, 1024, 1024 ]
-    embed_dims: [ 70, 70, 70 ]
+    embed_dims: [ 384, 384, 384 ]
     beta: 0.25
     normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false
@@ -61,10 +61,10 @@ dataset:
 dataloader:
   train:
     batch_size: 128  # total
-    num_workers: 8  # total
+    num_workers: 4  # total
   val:
-    batch_size: 16  # total
-    num_workers: 8  # total
+    batch_size: 32  # total
+    num_workers: 2  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
@@ -82,11 +82,11 @@ optimizer:
 # ---------------------------------------------------------------- #
 scheduler:
   model:
-    name: "constant"
+    name: "cos"
   cluster:
-    name: "constant"
+    name: "cos"
   linear:
-    name: "constant"
+    name: "cos"
 
 # ---------------------------------------------------------------- #
 eval:
@@ -98,5 +98,5 @@ train:
   max_epochs: 10
   print_interval_iters: 25
   valid_interval_iters: 100
-  clip_grad: 1
+  clip_grad: 1.0
   num_accum: 2

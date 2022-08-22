@@ -201,8 +201,12 @@ class EmbeddingEMA(nn.Module):
         self.weight_avg.data.copy_(self.weight.data)
         self.vq_count.fill_(0)
 
-    def forward(self, indices: torch.Tensor) -> torch.Tensor:
-        return F.embedding(indices, self.weight)
+    def forward(self, indices: torch.Tensor, is_sum: bool = False) -> torch.Tensor:
+        if is_sum:
+            embeded = torch.matmul(indices, self.weight)
+        else:
+            embeded = F.embedding(indices, self.weight)
+        return embeded
 
     def update(self, vq_current_count, vq_current_sum) -> None:
         # EMA count update
@@ -237,7 +241,7 @@ class EMAVectorQuantizer(nn.Module):
                  decay: float = 0.99,
                  eps: float = 1e-5,
                  use_restart: bool = False,
-                 use_gumbel: bool = False,
+                 use_gumbel: bool = False
                  ) -> None:
         super().__init__()
         self.num_codebook = num_codebook

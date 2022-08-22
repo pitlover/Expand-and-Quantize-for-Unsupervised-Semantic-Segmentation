@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI_ema"
+  name: "HIHI3_ema"
   notes: "dropoutX, bn->ln, kernel-1, num_resblock-1"
 
 # ---------------------------------------------------------------- #
@@ -82,11 +82,11 @@ optimizer:
 # ---------------------------------------------------------------- #
 scheduler:
   model:
-    name: "constant"
+    name: "cos"
   cluster:
-    name: "constant"
+    name: "cos"
   linear:
-    name: "constant"
+    name: "cos"
 
 # ---------------------------------------------------------------- #
 eval:

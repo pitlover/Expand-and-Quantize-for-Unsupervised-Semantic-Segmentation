@@ -78,7 +78,7 @@ class DINOUnSeg(nn.Module):
 
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
-        dino_feat = self.extractor(img)  # (b, 384, 28, 28)
+        dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
 
         feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
 
@@ -101,9 +101,32 @@ class DINOUnSeg(nn.Module):
         feat = self.vq_concat_proj(feat)  # (b, 384, 28, 28)
 
         recon = self.dec_proj(feat)  # (b, 384, 28, 28)
-
         recon_loss = F.mse_loss(recon, dino_feat)
+
         output["recon-loss"] = recon_loss
+
+        ######################################
+        # check mean, std
+
+        z_dino = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        b, h, w, d = z_dino.shape
+        z_dino = z_dino.view(-1, d)  # (bhw, d) = (n, d)
+
+        dino_std_mean = torch.std_mean(z_dino, dim=1, keepdim=True)
+        print(dino_feat.shape, dino_std_mean)
+
+        z_recon = recon.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        b, h, w, d = z_recon.shape
+        z_recon = z_recon.view(-1, d)  # (bhw, d) = (n, d)
+
+        recon_std_mean = torch.std_mean(z_recon, dim=1, keepdim=True)
+        print(z_recon.shape, recon_std_mean)
+        print("dino std", dino_std_mean[0])
+        print("recon std", recon_std_mean[0])
+
+        print("dino mean", dino_std_mean[1])
+        print("recon mean", recon_std_mean[1])
+        exit()
 
         return feat, feat_vqs, output
 

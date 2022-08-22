@@ -7,8 +7,10 @@ from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import ResBlock
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer
 
+import torchvision.transforms as transforms
 
-class DINOUnSeg(nn.Module):
+
+class DINOContra(nn.Module):
     def __init__(self, cfg: dict):  # cfg["model"]
         super().__init__()
         self.cfg = cfg
@@ -33,6 +35,7 @@ class DINOUnSeg(nn.Module):
         self.vq_type = cfg["vq"]["vq_type"]
         self.use_restart = cfg["vq"].get("use_restart", False)
         self.use_gumbel = cfg["vq"].get("use_gumbel", False)
+        self.jsd = JSD()
 
         vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
                          use_restart=self.use_restart, use_gumbel=self.use_gumbel)
@@ -76,10 +79,19 @@ class DINOUnSeg(nn.Module):
             dec_proj.append(ResBlock(self.feat_dim, self.feat_dim))
         self.dec_proj = nn.Sequential(*dec_proj)
 
+    def _Augmentation(self, x: torch.Tensor):
+        Augmentation = transforms.Compose([
+            transforms.ColorJitter(brightness=.3, contrast=.3, saturation=.3, hue=.1),
+            transforms.RandomGrayscale(.2),
+            transforms.RandomApply([transforms.GaussianBlur((5, 5))])
+        ])
+
+        return Augmentation(x)
+
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
-        dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
-
+        img1 = self._Augmentation(img)
+        dino_feat = self.extractor(img1)  # (b, 384, 28, 28) (b, d, h, w)
         feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
 
         output = dict()
@@ -87,7 +99,9 @@ class DINOUnSeg(nn.Module):
 
         for i in range(self.num_vq):
             feat_i = self.vq_input_proj[i](feat)
-            feat_vq_i, vq_i_output = self.vq_blocks[i](feat_i)
+            feat_vq_i, vq_i_output, dis_prob = self.vq_blocks[i](feat_i)
+            if i == 0:
+                ori_dis_prob = dis_prob
             feat_vqs.append(feat_vq_i)
 
             for k, v in vq_i_output.items():
@@ -105,8 +119,36 @@ class DINOUnSeg(nn.Module):
 
         output["recon-loss"] = recon_loss
 
+        if self.training:
+            # aug -> calculate loss only on stage1
+            # TODO only photometric aug not geometric
+            img2 = self._Augmentation(img)
+            dino_feat2 = self.extractor(img2)
+            feat2 = self.enc_proj(dino_feat2)
+
+            feat2_i = self.vq_input_proj[0](feat2)
+            feat2_vq_i, vq_i_output2, dis_prob2 = self.vq_blocks[0](feat2_i)
+            output['contra-loss'] = self.jsd(ori_dis_prob, dis_prob2)
+
         return feat, feat_vqs, output
 
     def restart(self):
         for i in range(self.num_vq):
             self.vq_blocks[i].restart()
+
+
+class JSD(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.kl = nn.KLDivLoss(reduction='batchmean')
+        # self.kl = nn.KLDivLoss(reduction='batchmean', log_target=True)
+
+    def forward(self, p: torch.tensor, q: torch.tensor):
+        '''
+
+        :param p:    (bhw, K)
+        :param q:    (bhw, K)
+        :return:
+        '''
+        m = (0.5 * (p + q))
+        return 0.5 * (self.kl(m, p) + self.kl(m, q))

@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRA1_two_stage"
-  notes: "enc_dec_1, ln, two-stage"
+  name: "CONTRA0_basic"
+  notes: "dropoutX, bn->ln, kernel-1, num_resblock-1, gumbel X"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -14,7 +14,6 @@ data_dir: "../Datasets/cocostuff"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null
-
 # ---------------------------------------------------------------- #
 model:
   pretrained:
@@ -24,18 +23,16 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: false
-
-
   enc_num_blocks: 3
   dec_num_blocks: 3
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024, 1024 ]
-    embed_dims: [ 384, 384 ]
+    num_codebooks: [ 1024, 1024, 1024 ]
+    embed_dims: [ 384, 384, 384 ]
     beta: 0.25
     normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false
-    use_gumbel: true
+    use_gumbel: false
     decay: 0.95
     eps: 1.0e-5
 
@@ -63,10 +60,10 @@ dataset:
 dataloader:
   train:
     batch_size: 128  # total
-    num_workers: 8  # total
+    num_workers: 4  # total
   val:
     batch_size: 32  # total
-    num_workers: 4  # total
+    num_workers: 2  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
@@ -99,6 +96,6 @@ eval:
 train:
   max_epochs: 10
   print_interval_iters: 25
-  valid_interval_iters: 100 # valid after the number of steps
+  valid_interval_iters: 100
   clip_grad: 1.0
-  num_accum: 1
+  num_accum: 2

@@ -141,7 +141,6 @@ class JSD(nn.Module):
     def __init__(self):
         super().__init__()
         self.kl = nn.KLDivLoss(reduction='batchmean')
-        # self.kl = nn.KLDivLoss(reduction='batchmean', log_target=True)
 
     def forward(self, p: torch.tensor, q: torch.tensor):
         '''
@@ -151,4 +150,4 @@ class JSD(nn.Module):
         :return:
         '''
         m = (0.5 * (p + q))
-        return 0.5 * (self.kl(m, p) + self.kl(m, q))
+        return 0.5 * (self.kl(p.log(), m) + self.kl(q.log(), m))  # (log_softmax_input, target)

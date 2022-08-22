@@ -61,7 +61,7 @@ def train_epoch(
         s += f"Current iter: {it} (epoch {current_epoch}, " \
              f"epoch done: {it / len(train_dataloader) * 100:.2f} %)\n"
         # -------------------------------- data -------------------------------- #
-        img = data["img"].to(device, non_blocking=True)
+        img = data["img_aug"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
         data_time = time.time() - data_start_time
 

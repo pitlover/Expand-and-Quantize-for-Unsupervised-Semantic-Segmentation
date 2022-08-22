@@ -336,7 +336,8 @@ class UnSegDataset(Dataset):
             seed = random.randint(0, 2147483647)  # make a seed with numpy generator
 
             self._set_seed(seed)
-            img_aug = self.aug_photometric_transform(self.aug_geometric_transform(img))
+            img_aug = self.aug_geometric_transform(img)
+            # img_aug = self.aug_photometric_transform(self.aug_geometric_transform(img))
             ret["img_aug"] = img_aug
 
             coord_entries = torch.meshgrid(

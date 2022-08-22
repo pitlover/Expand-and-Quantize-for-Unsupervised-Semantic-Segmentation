@@ -293,7 +293,8 @@ def run(cfg: Dict, debug: bool = False) -> None:
         print(f"Model parameters: {p1} tensors, {p2} elements.")
 
     if cfg["resume"]["checkpoint"] is not None:
-        raise NotImplementedError  # resume
+        save_dir = cfg["resume"]["checkpoint"]
+        ckpt = True
     else:
         ckpt = None
 
@@ -321,8 +322,6 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
     schedulers = [model_scheduler, cluster_scheduler, linear_scheduler]
 
-    if ckpt is not None:
-        raise NotImplementedError  # resume
 
     # ======================================================================================== #
     # Trainer
@@ -339,12 +338,13 @@ def run(cfg: Dict, debug: bool = False) -> None:
     best_metric["Linear_mIoU"] = 0.0
     best_metric["Linear_Accuracy"] = 0.0
 
-    if ckpt is not None:
-        raise NotImplementedError  # resume
-
     current_epoch = 0
     current_iter = 0
     best_iter = best_epoch = 0
+
+    if ckpt is not None:
+        current_epoch = max_epochs
+
     # -------- main loop -------- #
     while current_epoch < max_epochs:
         if is_master():

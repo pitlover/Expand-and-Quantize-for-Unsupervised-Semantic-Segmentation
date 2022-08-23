@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRA0_basic"
-  notes: "dropoutX, bn->ln, kernel-1, num_resblock-1, gumbel X"
+  name: "CONTRA0_geo_aug2"
+  notes: "dropoutX, bn->ln, kernel-1, num_resblock-3"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -32,7 +32,7 @@ model:
     beta: 0.25
     normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false
-    use_gumbel: false
+    use_gumbel: true
     decay: 0.95
     eps: 1.0e-5
 
@@ -60,7 +60,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 64  # total
     num_workers: 4  # total
   val:
     batch_size: 32  # total

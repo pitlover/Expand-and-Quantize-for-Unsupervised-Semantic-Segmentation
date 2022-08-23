@@ -230,8 +230,8 @@ class CroppedDataset(Dataset):
         image = Image.open(image_path).convert('RGB')
         label = Image.open(label_path)
 
-        image = self.transform(image)
-        label = self.target_transform(label).squeeze(0)
+        image = self.transform(image)  # (3, 224, 224)
+        label = self.target_transform(label).squeeze(0) # (224, 224)
 
         label = (label - 1)
         mask = (label == -1)
@@ -332,13 +332,63 @@ class UnSegDataset(Dataset):
             "img_path": image_path
         }
 
+
         if self.aug_photometric_transform is not None:
             seed = random.randint(0, 2147483647)  # make a seed with numpy generator
 
             self._set_seed(seed)
-            img_aug = self.aug_geometric_transform(img)
+            # TODO check img, img_aug, label, label_aug
+            img_aug = self.aug_geometric_transform(img)  # only geometric aug -> for contrastive
             # img_aug = self.aug_photometric_transform(self.aug_geometric_transform(img))
+
+            self._set_seed(seed)
+            label = label.unsqueeze(0)
+            label_aug = self.aug_geometric_transform(label).squeeze(0)
+
+            # from torchvision.transforms import ToPILImage
+            # import numpy as np
+            #
+            # img = ToPILImage()(img)
+            # img.save(f"{index}_img.png")
+            #
+            # img_aug = ToPILImage()(img_aug)
+            # img_aug.save(f"{index}_img_aug.png")
+            #
+            # def bit_get(val, idx):
+            #     """Gets the bit value.
+            #     Args:
+            #       val: Input value, int or numpy int array.
+            #       idx: Which bit of the input val.
+            #     Returns:
+            #       The "idx"-th bit of input val.
+            #     """
+            #     return (val >> idx) & 1
+            #
+            # def create_pascal_label_colormap():
+            #     """Creates a label colormap used in PASCAL VOC segmentation benchmark.
+            #     Returns:
+            #       A colormap for visualizing segmentation results.
+            #     """
+            #     colormap = np.zeros((512, 3), dtype=int)
+            #     ind = np.arange(512, dtype=int)
+            #
+            #     for shift in reversed(list(range(8))):
+            #         for channel in range(3):
+            #             colormap[:, channel] |= bit_get(ind, channel) << shift
+            #         ind >>= 3
+            #
+            #     return colormap
+            #
+            # label_cmap = create_pascal_label_colormap()
+            # plot_label = (label_cmap[label.squeeze()]).astype(np.uint8)
+            # Image.fromarray(plot_label).save(f"{index}_label.png")
+            #
+            # plot_label = (label_cmap[label_aug.squeeze()]).astype(np.uint8)
+            # Image.fromarray(plot_label).save(f"{index}label_aug.png")
+            # exit()
+
             ret["img_aug"] = img_aug
+            ret["label_aug"] = label_aug
 
             coord_entries = torch.meshgrid(
                 [torch.linspace(-1, 1, img.shape[1]),

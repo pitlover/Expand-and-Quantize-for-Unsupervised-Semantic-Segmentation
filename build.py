@@ -89,7 +89,7 @@ def build_scheduler(cfg: dict,
     elif (scheduler_type == "cos") or (scheduler_type == "cosine"):
         scheduler = CosineAnnealingLR(optimizer,
                                       T_max=epoch * iter_per_epoch,
-                                      eta_min=cfg.get("min_lr", 0.0),
+                                      eta_min=cfg.get("min_lr", 0.00005),
                                       last_epoch=-1)
     else:
         raise ValueError(f"Unsupported scheduler type {scheduler_type}.")

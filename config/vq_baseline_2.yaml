@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI2_weighted_sum_ts0.2"
-  notes: "dropoutX, bn->ln, kernel-1, num_resblock-1"
+  name: "HIHI2_geo"
+  notes: "dropoutX, bn->ln, kernel-1, bs-128, num_resblock-3"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -60,10 +60,10 @@ dataset:
 dataloader:
   train:
     batch_size: 128  # total
-    num_workers: 4  # total
+    num_workers: 8  # total
   val:
     batch_size: 32  # total
-    num_workers: 2  # total
+    num_workers: 4  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
@@ -98,4 +98,4 @@ train:
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0
-  num_accum: 2
+  num_accum: 1

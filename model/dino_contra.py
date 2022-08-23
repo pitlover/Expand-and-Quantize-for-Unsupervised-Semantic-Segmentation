@@ -119,16 +119,16 @@ class DINOContra(nn.Module):
 
         output["recon-loss"] = recon_loss
 
-        if self.training:
-            # aug -> calculate loss only on stage1
-            # TODO only photometric aug not geometric
-            img2 = self._Augmentation(img)
-            dino_feat2 = self.extractor(img2)
-            feat2 = self.enc_proj(dino_feat2)
+        # aug -> calculate loss only on stage1
+        # TODO only photometric aug not geometric
 
-            feat2_i = self.vq_input_proj[0](feat2)
-            feat2_vq_i, vq_i_output2, dis_prob2 = self.vq_blocks[0](feat2_i)
-            output['contra-loss'] = self.jsd(ori_dis_prob, dis_prob2)
+        img2 = self._Augmentation(img)
+        dino_feat2 = self.extractor(img2)
+        feat2 = self.enc_proj(dino_feat2)
+
+        feat2_i = self.vq_input_proj[0](feat2)
+        feat2_vq_i, vq_i_output2, dis_prob2 = self.vq_blocks[0](feat2_i)
+        output['contra-loss'] = self.jsd(ori_dis_prob, dis_prob2)
 
         return feat, feat_vqs, output
 

@@ -24,7 +24,7 @@ class DINOUnSegWrapper(nn.Module):
         self.num_vq = self.model.num_vq
         self.recon_weight = cfg["loss"]["recon_weight"]
         self.vq_weight = cfg["loss"]["vq_weight"]
-        self.contra_weight = cfg["loss"]["contra_weight"]
+        self.contra_weight = cfg["loss"].get("contra_weight", 0.0)
         self.output_type = cfg["eval"]["output_type"]
 
         if self.output_type == "feat":

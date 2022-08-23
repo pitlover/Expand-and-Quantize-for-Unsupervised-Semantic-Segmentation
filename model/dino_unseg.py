@@ -87,7 +87,7 @@ class DINOUnSeg(nn.Module):
 
         for i in range(self.num_vq):
             feat_i = self.vq_input_proj[i](feat)
-            feat_vq_i, vq_i_output = self.vq_blocks[i](feat_i)
+            feat_vq_i, vq_i_output, distance_prob = self.vq_blocks[i](feat_i)
             feat_vqs.append(feat_vq_i)
 
             for k, v in vq_i_output.items():

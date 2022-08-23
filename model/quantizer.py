@@ -89,7 +89,7 @@ class VectorQuantizer(nn.Module):
             self.update_indices = None
             self.update_candidates = None
 
-    def forward(self, z: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    def forward(self, z: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
         """VQ forward
         :param z:       (batch_size, embed_dim, h, w)
         :return:        (batch_size, embed_dim, h, w) quantized
@@ -133,6 +133,7 @@ class VectorQuantizer(nn.Module):
             vq_indices = torch.argmax(distance_prob, dim=1)
         else:
             vq_indices = torch.argmin(distance, dim=1)  # (n,) : index of the closest code vector.
+        distance_prob = F.softmax(-distance, dim=1)
         z_quantized = self.codebook(vq_indices)  # (n, d)
 
         output = dict()
@@ -174,7 +175,7 @@ class VectorQuantizer(nn.Module):
         # reshape back to match original input shape
         q = z_quantized.view(b, h, w, d).permute(0, 3, 1, 2).contiguous()
 
-        return q, output
+        return q, output, distance_prob
 
 
 class EmbeddingEMA(nn.Module):
@@ -355,8 +356,9 @@ class EMAVectorQuantizer(nn.Module):
             distance_prob = F.gumbel_softmax(-distance / 0.01, tau=1.0, hard=True, dim=1)
             vq_indices = torch.argmax(distance_prob, dim=1)
         else:
-            distance_prob = F.softmax(-distance, dim=1)
+
             vq_indices = torch.argmin(distance, dim=1)  # (n,) : index of the closest code vector.
+        distance_prob = F.softmax(-distance, dim=1)
         z_quantized = self.codebook(vq_indices)  # (n, d)
 
         output = dict()

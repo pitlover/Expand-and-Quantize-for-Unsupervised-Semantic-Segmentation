@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI2_geo"
+  name: "HIHI2_gumbelX"
   notes: "dropoutX, bn->ln, kernel-1, bs-128, num_resblock-3"
 
 # ---------------------------------------------------------------- #

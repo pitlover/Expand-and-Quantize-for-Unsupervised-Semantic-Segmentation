@@ -90,8 +90,7 @@ class DINOContra(nn.Module):
 
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
-        img1 = self._Augmentation(img)
-        dino_feat = self.extractor(img1)  # (b, 384, 28, 28) (b, d, h, w)
+        dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
         feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
 
         output = dict()

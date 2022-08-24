@@ -17,15 +17,11 @@ class DINOUnSeg(nn.Module):
         self.feat_dim = self.extractor.n_feats  # 384
 
         # -------- encoder -------- #
-        from model.blocks.resnet import Encoder
         num_enc_blocks = cfg["enc_num_blocks"]
-        self.enc_proj = Encoder(self.feat_dim, self.feat_dim, n_res_block= num_enc_blocks, n_res_channel=self.feat_dim//4, stride=1)
-
-        # num_enc_blocks = cfg["enc_num_blocks"]
-        # enc_proj = []
-        # for i in range(num_enc_blocks):
-        #     enc_proj.append(ResBlock(self.feat_dim, self.feat_dim))
-        # self.enc_proj = nn.Sequential(*enc_proj)
+        enc_proj = []
+        for i in range(num_enc_blocks):
+            enc_proj.append(ResBlock(self.feat_dim, self.feat_dim))
+        self.enc_proj = nn.Sequential(*enc_proj)
 
         # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
@@ -74,16 +70,11 @@ class DINOUnSeg(nn.Module):
         self.vq_concat_proj = nn.Conv2d(sum(vq_embed_dims), self.feat_dim, 1, 1, 0)
 
         # -------- decoder -------- #
-        from model.blocks.resnet import Decoder
-        num_enc_blocks = cfg["dec_num_blocks"]
-        self.dec_proj = Decoder(self.feat_dim, self.feat_dim, channel= self.feat_dim, n_res_block=num_enc_blocks,
-                                n_res_channel=self.feat_dim // 4, stride=1)
-
-        # num_dec_blocks = cfg["dec_num_blocks"]
-        # dec_proj = []
-        # for i in range(num_dec_blocks):
-        #     dec_proj.append(ResBlock(self.feat_dim, self.feat_dim))
-        # self.dec_proj = nn.Sequential(*dec_proj)
+        num_dec_blocks = cfg["dec_num_blocks"]
+        dec_proj = []
+        for i in range(num_dec_blocks):
+            dec_proj.append(ResBlock(self.feat_dim, self.feat_dim))
+        self.dec_proj = nn.Sequential(*dec_proj)
 
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:

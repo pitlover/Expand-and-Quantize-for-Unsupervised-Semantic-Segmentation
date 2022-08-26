@@ -10,6 +10,8 @@ from data.dataset import UnSegDataset
 
 from model.dino_unseg import DINOUnSeg
 from model.dino_contra import DINOContra
+from model.dino_info import DINOInfo
+
 
 def build_model(cfg: dict,
                 name: str) -> nn.Module:
@@ -18,6 +20,8 @@ def build_model(cfg: dict,
         model = DINOUnSeg(cfg)
     elif "contra" in name:
         model = DINOContra(cfg)
+    elif "info" in name:
+        model = DINOInfo(cfg)
     else:
         raise ValueError(f"Unsupported type {name}.")
 

@@ -29,13 +29,13 @@ model:
   enc_num_blocks: 3
   dec_num_blocks: 3
   vq:
-    vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024, 1024 ]
-    embed_dims: [ 384, 384 ]
+    vq_type: "param"  # ema, param
+    num_codebooks: [ 1024, 1024, 1024 ]
+    embed_dims: [ 384, 384, 384 ]
     beta: 0.25
     normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false
-    use_gumbel: true
+    use_gumbel: false
     decay: 0.95
     eps: 1.0e-5
 

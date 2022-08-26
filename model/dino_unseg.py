@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.blocks.resnet import ResBlock
+from model.blocks.resnet import ResBlock, LayerNorm2d
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer
 
 
@@ -15,12 +15,13 @@ class DINOUnSeg(nn.Module):
 
         self.extractor = DinoFeaturizer(cfg["pretrained"])
         self.feat_dim = self.extractor.n_feats  # 384
+        self.hidden_dim = cfg.get("hidden_dim", self.feat_dim)
 
         # -------- encoder -------- #
         num_enc_blocks = cfg["enc_num_blocks"]
         enc_proj = []
         for i in range(num_enc_blocks):
-            enc_proj.append(ResBlock(self.feat_dim, self.feat_dim))
+            enc_proj.append(ResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
         self.enc_proj = nn.Sequential(*enc_proj)
 
         # -------- vq -------- #
@@ -32,10 +33,11 @@ class DINOUnSeg(nn.Module):
         self.normalize = cfg["vq"]["normalize"]
         self.vq_type = cfg["vq"]["vq_type"]
         self.use_restart = cfg["vq"].get("use_restart", False)
+        self.use_split = cfg["vq"].get("use_split", False)
         self.use_gumbel = cfg["vq"].get("use_gumbel", False)
 
         vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
-                         use_restart=self.use_restart, use_gumbel=self.use_gumbel)
+                         use_restart=self.use_restart, use_gumbel=self.use_gumbel, use_split=self.use_split)
 
         if self.vq_type == "ema":
             vq_kwargs["decay"] = cfg["vq"]["decay"]
@@ -56,25 +58,32 @@ class DINOUnSeg(nn.Module):
         # -------- vq connections -------- #
         vq_input_proj = []
         for i in range(self.num_vq):
-            vq_input_proj.append(nn.Conv2d(self.feat_dim, vq_embed_dims[i], 1, 1, 0))
+            vq_input_proj.append(nn.Sequential(
+                nn.LeakyReLU(0.1, inplace=False),  # MOVED TO HERE
+                nn.Conv2d(self.hidden_dim, vq_embed_dims[i], 1, 1, 0, bias=False),
+            ))
         self.vq_input_proj = nn.ModuleList(vq_input_proj)
 
         vq_output_proj = []
         for i in range(self.num_vq - 1):
             vq_output_proj.append(nn.Sequential(
-                nn.Conv2d(self.feat_dim + vq_embed_dims[i], self.feat_dim, 1, 1, 0),
-                nn.ReLU(inplace=True)
+                nn.Conv2d(self.hidden_dim + vq_embed_dims[i], self.hidden_dim, 1, 1, 0),
+                # nn.ReLU(inplace=True)  # ORIGINALLY HERE
+                # nn.LeakyReLU(0.1, inplace=True)
             ))
         self.vq_output_proj = nn.ModuleList(vq_output_proj)
 
-        self.vq_concat_proj = nn.Conv2d(sum(vq_embed_dims), self.feat_dim, 1, 1, 0)
+        self.vq_concat_proj = nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 1, 1, 0)
 
         # -------- decoder -------- #
         num_dec_blocks = cfg["dec_num_blocks"]
         dec_proj = []
         for i in range(num_dec_blocks):
-            dec_proj.append(ResBlock(self.feat_dim, self.feat_dim))
+            dec_proj.append(ResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
         self.dec_proj = nn.Sequential(*dec_proj)
+
+        last_norm = cfg.get("last_norm", False)
+        self.dec_norm = LayerNorm2d(self.feat_dim) if last_norm else None
 
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
@@ -101,6 +110,10 @@ class DINOUnSeg(nn.Module):
         feat = self.vq_concat_proj(feat)  # (b, 384, 28, 28)
 
         recon = self.dec_proj(feat)  # (b, 384, 28, 28)
+
+        if self.dec_norm is not None:
+            recon = self.dec_norm(recon)
+
         recon_loss = F.mse_loss(recon, dino_feat)
 
         output["recon-loss"] = recon_loss

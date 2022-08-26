@@ -231,7 +231,7 @@ class CroppedDataset(Dataset):
         label = Image.open(label_path)
 
         image = self.transform(image)  # (3, 224, 224)
-        label = self.target_transform(label).squeeze(0) # (224, 224)
+        label = self.target_transform(label).squeeze(0)  # (224, 224)
 
         label = (label - 1)
         mask = (label == -1)
@@ -324,14 +324,20 @@ class UnSegDataset(Dataset):
     def __getitem__(self, index: int):
         img, label, mask, image_path = self.dataset[index]
 
+        # ind_pos = self.nns[index][torch.randint(low=1, high=self.num_neighbors + 1, size=[]).item()]
+        # img_pos, label_pos, mask_pos, image_path_pos = self.dataset[ind_pos]
+
         ret = {
             "index": index,
             "img": img,
             "label": label,
             "mask": mask,
-            "img_path": image_path
+            "img_path": image_path,
+            # "img_pos": img_pos,
+            # "label_pos": label_pos,
+            # "mask_pos": mask_pos,
+            # "img_path_pos": image_path_pos
         }
-
 
         if self.aug_photometric_transform is not None:
             seed = random.randint(0, 2147483647)  # make a seed with numpy generator

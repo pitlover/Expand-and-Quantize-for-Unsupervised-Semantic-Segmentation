@@ -1,4 +1,3 @@
-import random
 from typing import Dict, Tuple, List
 import torch
 import torch.nn as nn
@@ -6,13 +5,10 @@ import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import ResBlock
-from model.loss import JSDLoss
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer
 
-import torchvision.transforms as transforms
 
-
-class DINOContra(nn.Module):
+class DINOInfo(nn.Module):
     def __init__(self, cfg: dict):  # cfg["model"]
         super().__init__()
         self.cfg = cfg
@@ -37,7 +33,6 @@ class DINOContra(nn.Module):
         self.vq_type = cfg["vq"]["vq_type"]
         self.use_restart = cfg["vq"].get("use_restart", False)
         self.use_gumbel = cfg["vq"].get("use_gumbel", False)
-        self.jsd = JSDLoss()
 
         vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
                          use_restart=self.use_restart, use_gumbel=self.use_gumbel)
@@ -61,18 +56,23 @@ class DINOContra(nn.Module):
         # -------- vq connections -------- #
         vq_input_proj = []
         for i in range(self.num_vq):
-            vq_input_proj.append(nn.Conv2d(self.feat_dim, vq_embed_dims[i], 1, 1, 0))
+            vq_input_proj.append(nn.Sequential(
+                nn.Conv2d(self.feat_dim, vq_embed_dims[i], 1, 1, 0, bias=False),
+                nn.BatchNorm2d(vq_embed_dims[i])
+            ))
         self.vq_input_proj = nn.ModuleList(vq_input_proj)
 
         vq_output_proj = []
-        for i in range(self.num_vq - 1):
+        for i in range(self.num_vq):
             vq_output_proj.append(nn.Sequential(
-                nn.Conv2d(self.feat_dim + vq_embed_dims[i], self.feat_dim, 1, 1, 0),
-                nn.ReLU(inplace=True)
+                nn.Conv2d(self.feat_dim, self.feat_dim, 1, 1, 0),
+                nn.ReLU(inplace=True),
+                # nn.Conv2d(self.feat_dim, self.feat_dim, 1, 1, 0),
+                # nn.ReLU(inplace=True)
             ))
         self.vq_output_proj = nn.ModuleList(vq_output_proj)
 
-        self.vq_concat_proj = nn.Conv2d(sum(vq_embed_dims), self.feat_dim, 1, 1, 0)
+        self.vq_concat_proj = nn.Conv2d(sum(vq_embed_dims) + self.feat_dim, self.feat_dim, 1, 1, 0)
 
         # -------- decoder -------- #
         num_dec_blocks = cfg["dec_num_blocks"]
@@ -80,76 +80,45 @@ class DINOContra(nn.Module):
         for i in range(num_dec_blocks):
             dec_proj.append(ResBlock(self.feat_dim, self.feat_dim))
         self.dec_proj = nn.Sequential(*dec_proj)
-
-    # def _Augmentation(self, x: torch.Tensor):
-    #     Augmentation = transforms.Compose([
-    #         transforms.ColorJitter(brightness=.3, contrast=.3, saturation=.3, hue=.1),
-    #         transforms.RandomGrayscale(.2),
-    #         transforms.RandomApply([transforms.GaussianBlur((5, 5))])
-    #     ])
-    #
-    #     return Augmentation(x)
-
-    def _photo_aug(self, x: torch.Tensor):
-        # b, 3, h, w = x.shape
-        batch_size = x.shape[0]
-        device = x.device
-        random_scale = torch.ones(batch_size, 3, 1, 1, dtype=torch.float32, device=device).uniform_(0.9, 1.1)  # noqa
-        random_offset = torch.ones(batch_size, 3, 1, 1, dtype=torch.float32, device=device).uniform_(-0.1, 0.1)  # noqa
-        x_aug = x * random_scale + random_offset
-        if random.randint(0, 3) == 0:  # 25%
-            x_aug = transforms.GaussianBlur(kernel_size=3)(x_aug)
-        return x_aug
+        self.dec_norm = nn.LayerNorm(self.feat_dim)
 
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
+        dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
 
-        # photometric aug
-        img_aug_1 = img
-        img_aug_2 = self._photo_aug(img)
-
-        img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
-
-        dino_feat = self.extractor(img)  # (2b, 384, 28, 28)
-        feat = self.enc_proj(dino_feat)  # (2b, 384, 28, 28)
+        feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
 
         output = dict()
         feat_vqs = []
 
         for i in range(self.num_vq):
             feat_i = self.vq_input_proj[i](feat)
-            feat_vq_i, vq_i_output, dis_prob = self.vq_blocks[i](feat_i)
-            if i == 0:
-                ori_dis_prob = dis_prob
+            feat_vq_i, vq_i_output, distance_prob = self.vq_blocks[i](feat_i)
             feat_vqs.append(feat_vq_i)
 
             for k, v in vq_i_output.items():
                 output[f"vq{i}-{k}"] = v
 
-            if i < self.num_vq - 1:
-                feat_i = torch.cat([feat, feat_vq_i], dim=1)
-                feat = self.vq_output_proj[i](feat_i)
+            feat = self.vq_output_proj[i](feat)
+
+        # last
+        feat_vqs.append(feat)
 
         feat = torch.cat(feat_vqs, dim=1)
-        feat = self.vq_concat_proj(feat)  # (2b, 384, 28, 28)
+        feat = self.vq_concat_proj(feat)  # (b, 384, 28, 28)
 
-        recon = self.dec_proj(feat)  # (2b, 384, 28, 28)
+        recon = self.dec_proj(feat)  # (b, 384, 28, 28)
+
+        recon = recon.permute(0, 2, 3, 1).contiguous()
+        recon = self.dec_norm(recon)
+        recon = recon.permute(0, 3, 1, 2).contiguous()
+
         recon_loss = F.mse_loss(recon, dino_feat)
 
         output["recon-loss"] = recon_loss
-
-        # contrastive loss
-        dis_prob_1, dis_prob_2 = torch.chunk(ori_dis_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
-        output["contra-loss"] = self.jsd(dis_prob_1, dis_prob_2)
-
-        # split half
-        feat = torch.chunk(feat, chunks=2, dim=0)[0]
-        feat_vqs = [torch.chunk(vq_i, chunks=2, dim=0)[0] for vq_i in feat_vqs]
 
         return feat, feat_vqs, output
 
     def restart(self):
         for i in range(self.num_vq):
             self.vq_blocks[i].restart()
-
-

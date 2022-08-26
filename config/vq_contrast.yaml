@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI_large"
-  notes: ""
+  name: "CONTRAST"
+  notes: "dropoutX, bn->ln, kernel-1, bs-128, num_resblock-3"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -23,19 +23,16 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: false
-  enc_num_blocks: 2
-  dec_num_blocks: 4
-  hidden_dim: 2048
-  last_norm: false
+  enc_num_blocks: 3
+  dec_num_blocks: 3
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024, 2048, 4096 ]
-    embed_dims: [ 512, 512, 512 ]
+    num_codebooks: [ 1024, 1024, 1024 ]
+    embed_dims: [ 384, 384, 384 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
-    use_split: true
-    use_gumbel: false
+    use_gumbel: true
     decay: 0.99
     eps: 1.0e-5
 
@@ -43,6 +40,7 @@ model:
 loss:
   recon_weight: 1.0
   vq_weight: 100.0
+  contra_weight : 1000.0
 
 # ---------------------------------------------------------------- #
 dataset:
@@ -62,7 +60,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 64  # total
     num_workers: 8  # total
   val:
     batch_size: 32  # total
@@ -92,13 +90,13 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "vq0" # feat, vq0
+  output_type: "vq0"
   extra_classes: 0
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 100
+  max_epochs: 10
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0
-  num_accum: 1
+  num_accum: 2

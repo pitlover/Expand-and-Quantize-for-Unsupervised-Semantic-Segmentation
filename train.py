@@ -5,6 +5,7 @@ import time
 import pprint
 import wandb
 import torch
+import torch.nn as nn
 from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.nn.utils.clip_grad import clip_grad_norm_
 
@@ -61,9 +62,12 @@ def train_epoch(
         s += f"Current iter: {it} (epoch {current_epoch}, " \
              f"epoch done: {it / len(train_dataloader) * 100:.2f} %)\n"
         # -------------------------------- data -------------------------------- #
-        # TODO handle img, img_aug, label, label_aug
-        img = data["img"].to(device, non_blocking=True)
-        label = data["label"].to(device, non_blocking=True)
+        # img = data["img"].to(device, non_blocking=True)
+        # label = data["label"].to(device, non_blocking=True)
+
+        # TODO add geometric augmentation
+        img = data["img_aug"].to(device, non_blocking=True)
+        label = data["label_aug"].to(device, non_blocking=True)
         data_time = time.time() - data_start_time
 
         # -------------------------------- loss -------------------------------- #
@@ -141,10 +145,10 @@ def train_epoch(
                     s = time_log()
                     s += f"Valid updated!\n"
                     s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"
-                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']} ->  {cluster_result['iou'].item()}\n"
-                    s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']} ->  {cluster_result['accuracy'].item()}\n"
-                    s += f"... Linear mIoU: {best_metric['Linear_mIoU']} ->  {linear_result['iou'].item()}\n"
-                    s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']} ->  {linear_result['accuracy'].item()}"
+                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']:.6f} ->  {cluster_result['iou'].item():.6f}\n"
+                    s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']:.6f} ->  {cluster_result['accuracy'].item():.6f}\n"
+                    s += f"... Linear mIoU: {best_metric['Linear_mIoU']:.6f} ->  {linear_result['iou'].item():.6f}\n"
+                    s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']:.6f} ->  {linear_result['accuracy'].item():.6f}"
                     print(s)
 
                     best_iter = current_iter
@@ -165,13 +169,14 @@ def train_epoch(
                     s = time_log()
                     s += f"Valid NOT updated ...\n"
                     s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"
-                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']} (best) vs {cluster_result['iou'].item()}\n"
-                    s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']} (best) vs {cluster_result['accuracy'].item()}\n"
-                    s += f"... Linear mIoU: {best_metric['Linear_mIoU']} (best) vs {linear_result['iou'].item()}\n"
-                    s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']} (best) vs {linear_result['accuracy'].item()}"
+                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']:.6f} (best) vs {cluster_result['iou'].item():.6f}\n"
+                    s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']:.6f} (best) vs {cluster_result['accuracy'].item():.6f}\n"
+                    s += f"... Linear mIoU: {best_metric['Linear_mIoU']:.6f} (best) vs {linear_result['iou'].item():.6f}\n"
+                    s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']:.6f} (best) vs {linear_result['accuracy'].item():.6f}"
                     print(s)
 
             model.train()
+            torch.cuda.empty_cache()
             torch.set_grad_enabled(True)  # same as 'with torch.enable_grad():'
 
         data_start_time = time.time()
@@ -283,6 +288,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
     model = DINOUnSegWrapper(cfg, model)
     model = model.to(device)
     if is_distributed_set():
+        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = DistributedDataParallel(model, device_ids=[local_rank], output_device=device)
         model_m = model.module  # actual model without wrapping
     else:
@@ -323,6 +329,9 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
     schedulers = [model_scheduler, cluster_scheduler, linear_scheduler]
 
+    for m in model.modules():
+        if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.SyncBatchNorm)):
+            m.momentum /= num_accum
 
     # ======================================================================================== #
     # Trainer
@@ -378,7 +387,8 @@ def run(cfg: Dict, debug: bool = False) -> None:
     s = time_log()
     best_checkpoint = torch.load(f"{save_dir}/best.pth", map_location=device)
     model_m = model.module if isinstance(model, DistributedDataParallel) else model
-    model_m.load_state_dict(best_checkpoint['model'], strict=True)
+    # model_m.load_state_dict(best_checkpoint['model'], strict=True)
+    model_m.load_state_dict(best_checkpoint['net_model_state_dict'], strict=True)
     final_start_time = time.time()
     s += "Final evaluation (before CRF)\n"
 

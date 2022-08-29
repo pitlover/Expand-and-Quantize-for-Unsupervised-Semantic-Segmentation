@@ -64,7 +64,7 @@ def train_epoch(
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
-        img_pos = data["img_pos"].to(device, non_blocking=True)
+        # img_pos = data["img_pos"].to(device, non_blocking=True)
 
         # TODO add geometric augmentation
         # img = data["img_aug"].to(device, non_blocking=True)
@@ -78,7 +78,7 @@ def train_epoch(
 
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
-            total_loss, output, _ = model(img, label, img_pos)  # total_loss, output, (linear_preds, cluster_preds)
+            total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
 
             backward_start_time = time.time()
@@ -97,12 +97,12 @@ def train_epoch(
 
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
-                total_loss, output, _ = model(img, label, img_pos)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
 
                 loss = total_loss / num_accum
                 loss.backward()
         else:  # non-update step and not DDP
-            total_loss, output, _ = model(img, label, img_pos)  # total_loss, output, (linear_preds, cluster_preds)
+            total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             loss.backward()
@@ -215,9 +215,9 @@ def valid_epoch(
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
-        img_pos = data["img_pos"].to(device, non_blocking=True)
+        # img_pos = data["img_pos"].to(device, non_blocking=True)
         # -------------------------------- loss -------------------------------- #
-        _, output, (linear_preds, cluster_preds) = model(img, label, img_pos, is_crf=is_crf)
+        _, output, (linear_preds, cluster_preds) = model(img, label, is_crf=is_crf)
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 

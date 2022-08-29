@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST"
-  notes: "dropoutX, bn->ln, kernel-1, bs-128, num_resblock-3"
+  name: "HIHI_PQ"
+  notes: ""
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -25,22 +25,26 @@ model:
     dropout: false
   enc_num_blocks: 3
   dec_num_blocks: 3
+  hidden_dim: 384
+  last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024, 1024 ]
-    embed_dims: [ 384, 384 ]
+    num_codebooks: [ 1024, 1024, 1024 ]
+    embed_dims: [ 384, 384, 384 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
-    use_gumbel: true
+    use_split: true
+    use_gumbel: false
     decay: 0.99
     eps: 1.0e-5
+    num_pq: 6
+    agg_type: "concat"  # add, concat
 
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  vq_weight: 100.0
-  contra_weight : 1000.0
+  vq_weight: 1.0
 
 # ---------------------------------------------------------------- #
 dataset:
@@ -63,7 +67,7 @@ dataloader:
     batch_size: 64  # total
     num_workers: 8  # total
   val:
-    batch_size: 32  # total
+    batch_size: 16  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
@@ -90,12 +94,12 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "vq0"
+  output_type: "vq0" # feat, vq0
   extra_classes: 0
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 100
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0

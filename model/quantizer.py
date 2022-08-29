@@ -8,7 +8,7 @@ import torch.nn.functional as F  # noqa
 from model.loss import JSDLoss
 from utils.dist_utils import all_reduce_tensor
 
-__all__ = ["VectorQuantizer", "EMAVectorQuantizer", "EmbeddingEMA"]
+__all__ = ["VectorQuantizer", "EMAVectorQuantizer", "EmbeddingEMA", "ProductQuantizerWrapper"]
 
 
 @torch.no_grad()
@@ -513,3 +513,62 @@ class EMAVectorQuantizer(nn.Module):
                f"use_gumbel={self.use_gumbel}, " \
                f"use_split={self.use_split}, " \
                f"use_restart={self.use_restart}"
+
+
+class ProductQuantizerWrapper(nn.Module):
+
+    def __init__(self,
+                 num_pq: int,
+                 num_codebook: int,
+                 embed_dim: int,
+                 beta: float = 0.25,  # commitment loss
+                 normalize: Optional[str] = None,
+                 decay: float = 0.99,
+                 eps: float = 1e-5,
+                 use_restart: bool = False,
+                 use_gumbel: bool = False,
+                 use_split: bool = False,
+                 quantizer_cls=EMAVectorQuantizer,
+                 ) -> None:
+        super().__init__()
+
+        if embed_dim % num_pq != 0:
+            raise ValueError(f"Embed dim {embed_dim} should be divisible by #PQ {num_pq}.")
+        self.num_pq = num_pq
+        self.pq_dim = embed_dim // num_pq
+
+        self.quantizers = nn.ModuleList([
+            quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize,
+                          decay=decay, eps=eps,
+                          use_restart=use_restart, use_gumbel=use_gumbel, use_split=use_split)
+            for _ in range(self.num_pq)
+        ])
+
+    def forward(self, z: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
+        # b, c, h, w = z.shape
+        z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
+
+        z_quantized = list()
+        outputs = dict()
+        distance_prob = list()
+
+        for i in range(self.num_pq):
+            q_i, output_i, prob_i = self.quantizers[i](z_split[i])
+            z_quantized.append(q_i)
+            if i == 0:
+                for k, v in output_i.items():
+                    outputs[k] = v
+            else:
+                for k, v in output_i.items():
+                    outputs[k] = outputs[k] + v
+            distance_prob.append(prob_i)
+
+        z_quantized = torch.cat(z_quantized, dim=1)
+        for k, v in outputs.items():
+            outputs[k] /= self.num_pq
+        distance_prob = torch.cat(distance_prob, dim=-1)  # (n, K x #pq)
+
+        return z_quantized, outputs, distance_prob
+
+    def extra_repr(self) -> str:
+        return f"num_pq={self.num_pq}"

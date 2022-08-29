@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-__all__ = ["ResBlock"]
+__all__ = ["ResBlock", "LayerNorm2d"]
 
 
 class LayerNorm2d(nn.LayerNorm):
@@ -34,8 +34,10 @@ class ResBlock(nn.Module):
 
         # self.conv1 = nn.Conv2d(in_channel, out_channel, 3, 1, 1, bias=False)
         self.conv1 = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)  # bottleneck
+        # self.conv1 = nn.Conv2d(in_channel, out_channel // 16, 1, 1, 0, bias=False)  # bottleneck
 
         self.norm2 = nn.BatchNorm2d(out_channel)
+        # self.norm2 = nn.BatchNorm2d(out_channel // 16)
         # self.norm2 = nn.GroupNorm(num_groups=16, num_channels=out_channel)
         # self.norm2 = LayerNorm2d(out_channel)
         # self.norm2 = nn.Identity()
@@ -45,6 +47,7 @@ class ResBlock(nn.Module):
 
         # self.conv2 = nn.Conv2d(out_channel, out_channel, 3, 1, 1, bias=False)
         self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=False)
+        # self.conv2 = nn.Conv2d(out_channel // 16, out_channel, 1, 1, 0, bias=False)
 
         if in_channel != out_channel:
             self.norm_shortcut = nn.BatchNorm2d(in_channel)

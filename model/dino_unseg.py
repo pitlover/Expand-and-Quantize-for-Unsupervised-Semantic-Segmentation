@@ -5,7 +5,7 @@ import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import ResBlock, LayerNorm2d
-from model.quantizer import VectorQuantizer, EMAVectorQuantizer
+from model.quantizer import VectorQuantizer, EMAVectorQuantizer, ProductQuantizerWrapper
 
 
 class DINOUnSeg(nn.Module):
@@ -36,6 +36,8 @@ class DINOUnSeg(nn.Module):
         self.use_split = cfg["vq"].get("use_split", False)
         self.use_gumbel = cfg["vq"].get("use_gumbel", False)
 
+        self.num_pq = cfg["vq"].get("num_pq", 1)
+
         vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
                          use_restart=self.use_restart, use_gumbel=self.use_gumbel, use_split=self.use_split)
 
@@ -43,12 +45,16 @@ class DINOUnSeg(nn.Module):
             vq_kwargs["decay"] = cfg["vq"]["decay"]
             vq_kwargs["eps"] = cfg["vq"]["eps"]
             vq_blocks = [
-                EMAVectorQuantizer(vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs)
+                EMAVectorQuantizer(vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs) if (self.num_pq == 1) else
+                ProductQuantizerWrapper(self.num_pq, vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+                                        quantizer_cls=EMAVectorQuantizer)
                 for i in range(self.num_vq)
             ]
         elif self.vq_type == "param":
             vq_blocks = [
-                VectorQuantizer(vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs)
+                VectorQuantizer(vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs) if (self.num_pq == 1) else
+                ProductQuantizerWrapper(self.num_pq, vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+                                        quantizer_cls=VectorQuantizer)
                 for i in range(self.num_vq)
             ]
         else:
@@ -73,7 +79,15 @@ class DINOUnSeg(nn.Module):
             ))
         self.vq_output_proj = nn.ModuleList(vq_output_proj)
 
-        self.vq_concat_proj = nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 1, 1, 0)
+        self.agg_type = cfg["vq"].get("agg_type", "concat")
+        if (self.agg_type == "cat") or (self.agg_type == "concat"):
+            self.agg_type = "concat"
+            self.vq_aggregate_proj = nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 1, 1, 0)
+        elif (self.agg_type == "add") or (self.agg_type == "sum"):
+            self.agg_type = "add"
+            self.vq_aggregate_proj = nn.Conv2d(self.hidden_dim, self.hidden_dim, 1, 1, 0)
+        else:
+            raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
 
         # -------- decoder -------- #
         num_dec_blocks = cfg["dec_num_blocks"]
@@ -88,7 +102,6 @@ class DINOUnSeg(nn.Module):
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
         dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
-
         feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
 
         output = dict()
@@ -106,8 +119,13 @@ class DINOUnSeg(nn.Module):
                 feat_i = torch.cat([feat, feat_vq_i], dim=1)
                 feat = self.vq_output_proj[i](feat_i)
 
-        feat = torch.cat(feat_vqs, dim=1)
-        feat = self.vq_concat_proj(feat)  # (b, 384, 28, 28)
+        if self.agg_type == "concat":
+            feat = torch.cat(feat_vqs, dim=1)
+        elif self.agg_type == "add":
+            feat = sum(feat_vqs)
+        else:
+            raise ValueError
+        feat = self.vq_aggregate_proj(feat)  # (b, 384, 28, 28)
 
         recon = self.dec_proj(feat)  # (b, 384, 28, 28)
 
@@ -120,6 +138,6 @@ class DINOUnSeg(nn.Module):
 
         return feat, feat_vqs, output
 
-    def restart(self):
-        for i in range(self.num_vq):
-            self.vq_blocks[i].restart()
+    # def restart(self):
+    #     for i in range(self.num_vq):
+    #         self.vq_blocks[i].restart()

@@ -478,8 +478,6 @@ class EMAVectorQuantizer(nn.Module):
         # compute loss for embedding
         commitment_loss = F.mse_loss(z_norm, z_norm_quantized.detach())  # make input to be similar to codebook
 
-        # jsd loss
-        # distance_prob_2d = distance_prob.view(b, h, w, k)  # (n, K) -> (b, h, w, K)
         # jsd_h = self.jsd(
         #     distance_prob_2d[:, 1:, :, :].contiguous().view(-1, k),
         #     distance_prob_2d[:, :-1, :, :].contiguous().view(-1, k),

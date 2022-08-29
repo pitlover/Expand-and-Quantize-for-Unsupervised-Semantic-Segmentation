@@ -10,18 +10,20 @@ from data.dataset import UnSegDataset
 
 from model.dino_unseg import DINOUnSeg
 from model.dino_contra import DINOContra
+from model.dino_stego import DINOStego
 from model.dino_info import DINOInfo
+from wrapper import DINOUnSegWrapper, StegoWrapper
 
 
 def build_model(cfg: dict,
                 name: str) -> nn.Module:
     # cfg["model"]
     if "hihi" in name:
-        model = DINOUnSeg(cfg)
+        model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
     elif "contra" in name:
-        model = DINOContra(cfg)
-    elif "info" in name:
-        model = DINOInfo(cfg)
+        model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
+    elif "stego" in name:
+        model = StegoWrapper(cfg, DINOStego(cfg["model"]))
     else:
         raise ValueError(f"Unsupported type {name}.")
 

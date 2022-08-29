@@ -62,7 +62,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 112  # total
     num_workers: 8  # total
   val:
     batch_size: 32  # total

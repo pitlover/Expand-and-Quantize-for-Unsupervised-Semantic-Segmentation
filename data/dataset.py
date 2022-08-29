@@ -2,7 +2,7 @@ from typing import Optional
 import os
 import random
 from os.path import join
-
+import numpy as np
 import torch.multiprocessing
 import torchvision.transforms as T  # noqa
 from PIL import Image
@@ -246,7 +246,7 @@ class UnSegDataset(Dataset):
                  crop_type: Optional[str],  # 5-crop
                  crop_ratio: float = 0.5,
                  loader_crop_type: str = "center",  # center, random
-                 res: int = 224,
+                 res: int = 224
                  ):
         super().__init__()
         self.mode = mode
@@ -313,6 +313,16 @@ class UnSegDataset(Dataset):
             **extra_args
         )
 
+        feature_cache_file = join(self.data_dir, "nns", f"nns_vit_small_cocostuff27_{mode}_{crop_type}_224.npz")
+
+        if not os.path.exists(feature_cache_file):
+            raise ValueError("could not find nn file {} please run precompute_knns".format(feature_cache_file))
+        else:
+            loaded = np.load(feature_cache_file)
+            self.nns = loaded["nns"]
+
+        assert len(self.dataset) == self.nns.shape[0], f"shape does not match {len(self.dataset)} vs {self.nns.shape[0]}"
+
     def __len__(self) -> int:
         return len(self.dataset)
 
@@ -324,8 +334,9 @@ class UnSegDataset(Dataset):
     def __getitem__(self, index: int):
         img, label, mask, image_path = self.dataset[index]
 
-        # ind_pos = self.nns[index][torch.randint(low=1, high=self.num_neighbors + 1, size=[]).item()]
-        # img_pos, label_pos, mask_pos, image_path_pos = self.dataset[ind_pos]
+        self.num_neighbors = 7
+        ind_pos = self.nns[index][torch.randint(low=1, high=self.num_neighbors + 1, size=[]).item()]
+        img_pos, label_pos, mask_pos, image_path_pos = self.dataset[ind_pos]
 
         ret = {
             "index": index,
@@ -333,12 +344,13 @@ class UnSegDataset(Dataset):
             "label": label,
             "mask": mask,
             "img_path": image_path,
-            # "img_pos": img_pos,
-            # "label_pos": label_pos,
-            # "mask_pos": mask_pos,
-            # "img_path_pos": image_path_pos
+            "img_pos": img_pos,
+            "label_pos": label_pos,
+            "mask_pos": mask_pos,
+            "img_path_pos": image_path_pos
         }
 
+        '''
         if self.aug_photometric_transform is not None:
             seed = random.randint(0, 2147483647)  # make a seed with numpy generator
 
@@ -405,5 +417,5 @@ class UnSegDataset(Dataset):
             self._set_seed(seed)
             coord_aug = self.aug_geometric_transform(coord)
             ret["coord_aug"] = coord_aug.permute(1, 2, 0)
-
+        '''
         return ret

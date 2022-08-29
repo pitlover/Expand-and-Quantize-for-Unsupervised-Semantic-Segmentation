@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "HIHI2_layernormX"
-  notes: "dropoutX, bn->ln, kernel-1, bs-128, num_resblock-3"
+  name: "STEGO"
+  notes: ""
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -22,23 +22,23 @@ model:
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
-    dropout: false
-  enc_num_blocks: 6
-  dec_num_blocks: 6
-  vq:
-    vq_type: "ema"  # ema, param
-    num_codebooks: [ 16384 ]
-    embed_dims: [ 64 ]
-    beta: 0.25
-    normalize: "l2"  # l2, z_norm, z_trainable, none
-    use_restart: false
-    use_gumbel: true
-    decay: 0.99
-    eps: 1.0e-5
+    dropout: true
+    dim : 70
+  neg_inter_weight: 0.63
+  pos_inter_weight: 0.25
+  pos_intra_weight: 0.67
+  neg_inter_shift: 0.66
+  pos_inter_shift: 0.02
+  pos_intra_shift: 0.08
+  zero_clamp: true
+  pointwise: true
+  stabilize: false
+  feature_samples: 11
+  neg_samples: 5
 
 # ---------------------------------------------------------------- #
 loss:
-  stego_weight : 1.0
+  stego_weight: 1.0
 
 # ---------------------------------------------------------------- #
 dataset:
@@ -67,15 +67,15 @@ dataloader:
 # ---------------------------------------------------------------- #
 optimizer:
   model:
-    name: "adamw"
-    lr: 3.0e-4
+    name: "adam"
+    lr: 5e-4
     weight_decay: 1.0e-6
   cluster:
     name: "adam"
-    lr: 3.0e-3
+    lr: 5.0e-3
   linear:
     name: "adam"
-    lr: 3.0e-3
+    lr: 5.0e-3
 
 # ---------------------------------------------------------------- #
 scheduler:
@@ -88,12 +88,11 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "vq0"
   extra_classes: 0
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 1
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0

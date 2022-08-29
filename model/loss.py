@@ -78,12 +78,7 @@ class ContrastiveCorrelationLoss(nn.Module):
                 orig_code: torch.Tensor,
                 orig_code_pos: torch.Tensor,
                 ):
-        # print("corr feat", orig_feats[0])
-        # print("corr head", orig_code[0])
-        # print("corr_pos feat", orig_feats_pos[0])
-        # print("corr_pos head", orig_code_pos[0])
-        # print("corr", orig_feats.shape, orig_code.shape)
-        coord_shape = [orig_feats.shape[0], self.cfg["feature_samples"], self.cfg["feature_samples"], 2]
+        coord_shape = [orig_feats.shape[0], 11, 11, 2]
 
         coords1 = torch.rand(coord_shape, device=orig_feats.device) * 2 - 1
         coords2 = torch.rand(coord_shape, device=orig_feats.device) * 2 - 1
@@ -93,11 +88,10 @@ class ContrastiveCorrelationLoss(nn.Module):
 
         feats_pos = sample(orig_feats_pos, coords2)
         code_pos = sample(orig_code_pos, coords2)
-
         pos_intra_loss, pos_intra_cd = self.helper(
-            feats, feats, code, code, self.cfg["corr_loss"]["pos_intra_shift"])
+            feats, feats, code, code, self.cfg["pos_intra_shift"])
         pos_inter_loss, pos_inter_cd = self.helper(
-            feats, feats_pos, code, code_pos, self.cfg["corr_loss"]["pos_inter_shift"])
+            feats, feats_pos, code, code_pos, self.cfg["pos_inter_shift"])
 
         neg_losses = []
         neg_cds = []
@@ -106,17 +100,17 @@ class ContrastiveCorrelationLoss(nn.Module):
             feats_neg = sample(orig_feats[perm_neg], coords2)
             code_neg = sample(orig_code[perm_neg], coords2)
             neg_inter_loss, neg_inter_cd = self.helper(
-                feats, feats_neg, code, code_neg, self.cfg["corr_loss"]["neg_inter_shift"])
+                feats, feats_neg, code, code_neg, self.cfg["neg_inter_shift"])
             neg_losses.append(neg_inter_loss)
             neg_cds.append(neg_inter_cd)
 
         neg_inter_loss = torch.cat(neg_losses, axis=0)
         neg_inter_cd = torch.cat(neg_cds, axis=0)
 
-        return (self.cfg["corr_loss"]["pos_intra_weight"] * pos_intra_loss.mean() +
-                self.cfg["corr_loss"]["pos_inter_weight"] * pos_inter_loss.mean() +
-                self.cfg["corr_loss"]["neg_inter_weight"] * neg_inter_loss.mean(),
-                {"self_loss": pos_intra_loss.mean().item(),
-                 "knn_loss": pos_inter_loss.mean().item(),
-                 "rand_loss": neg_inter_loss.mean().item()}
+        return (self.cfg["pos_intra_weight"] * pos_intra_loss.mean() +
+                self.cfg["pos_inter_weight"] * pos_inter_loss.mean() +
+                self.cfg["neg_inter_weight"] * neg_inter_loss.mean(),
+                pos_intra_loss.mean().item(),
+                pos_inter_loss.mean().item(),
+                neg_inter_loss.mean().item()
                 )

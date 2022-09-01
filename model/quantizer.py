@@ -476,6 +476,7 @@ class EMAVectorQuantizer(nn.Module):
                 output["codebook-usage"] = (self.num_codebook - n_split) / self.num_codebook  # used ratio
 
         # compute loss for embedding
+        # commitment_loss = F.mse_loss(z_flat, z_quantized.detach())  # make input to be similar to codebook
         commitment_loss = F.mse_loss(z_norm, z_norm_quantized.detach())  # make input to be similar to codebook
 
         # jsd_h = self.jsd(

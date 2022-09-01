@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.blocks.resnet import ResBlock
+from model.blocks.resnet import EncResBlock, DecResBlock
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer
 
 
@@ -20,7 +20,7 @@ class DINOInfo(nn.Module):
         num_enc_blocks = cfg["enc_num_blocks"]
         enc_proj = []
         for i in range(num_enc_blocks):
-            enc_proj.append(ResBlock(self.feat_dim, self.feat_dim))
+            enc_proj.append(EncResBlock(self.feat_dim, self.feat_dim))
         self.enc_proj = nn.Sequential(*enc_proj)
 
         # -------- vq -------- #
@@ -78,7 +78,7 @@ class DINOInfo(nn.Module):
         num_dec_blocks = cfg["dec_num_blocks"]
         dec_proj = []
         for i in range(num_dec_blocks):
-            dec_proj.append(ResBlock(self.feat_dim, self.feat_dim))
+            dec_proj.append(DecResBlock(self.feat_dim, self.feat_dim))
         self.dec_proj = nn.Sequential(*dec_proj)
         self.dec_norm = nn.LayerNorm(self.feat_dim)
 

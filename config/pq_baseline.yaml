@@ -23,14 +23,14 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: false
-  enc_num_blocks: 3
+  enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 384
+  hidden_dim: 1024
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024, 1024, 1024 ]
-    embed_dims: [ 384, 384, 384 ]
+    num_codebooks: [ 1024, 1024 ]
+    embed_dims: [ 512, 512 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
@@ -38,13 +38,13 @@ model:
     use_gumbel: false
     decay: 0.99
     eps: 1.0e-5
-    num_pq: 6
+    num_pq: [ 2, 16 ]
     agg_type: "concat"  # add, concat
 
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  vq_weight: 1.0
+  vq_weight: 10.0
 
 # ---------------------------------------------------------------- #
 dataset:
@@ -75,7 +75,7 @@ optimizer:
   model:
     name: "adamw"
     lr: 3.0e-4
-    weight_decay: 1.0e-6
+    weight_decay: 2.0
   cluster:
     name: "adam"
     lr: 3.0e-3

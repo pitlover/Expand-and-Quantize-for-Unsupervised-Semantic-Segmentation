@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.blocks.resnet import ResBlock, LayerNorm2d
+from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import JSDLoss
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer, ProductQuantizerWrapper
 
@@ -25,7 +25,7 @@ class DINOContra(nn.Module):
         num_enc_blocks = cfg["enc_num_blocks"]
         enc_proj = []
         for i in range(num_enc_blocks):
-            enc_proj.append(ResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
+            enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
         self.enc_proj = nn.Sequential(*enc_proj)
 
         # -------- vq -------- #
@@ -42,6 +42,8 @@ class DINOContra(nn.Module):
         self.jsd = JSDLoss()
 
         self.num_pq = cfg["vq"].get("num_pq", 1)
+        if isinstance(self.num_pq, int):
+            self.num_pq = [self.num_pq] * self.num_vq
 
         vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
                          use_restart=self.use_restart, use_gumbel=self.use_gumbel, use_split=self.use_split)
@@ -51,14 +53,14 @@ class DINOContra(nn.Module):
             vq_kwargs["eps"] = cfg["vq"]["eps"]
             vq_blocks = [
                 EMAVectorQuantizer(vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs) if (self.num_pq == 1) else
-                ProductQuantizerWrapper(self.num_pq, vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+                ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
                                         quantizer_cls=EMAVectorQuantizer)
                 for i in range(self.num_vq)
             ]
         elif self.vq_type == "param":
             vq_blocks = [
                 VectorQuantizer(vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs) if (self.num_pq == 1) else
-                ProductQuantizerWrapper(self.num_pq, vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+                ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
                                         quantizer_cls=VectorQuantizer)
                 for i in range(self.num_vq)
             ]
@@ -98,7 +100,8 @@ class DINOContra(nn.Module):
         num_dec_blocks = cfg["dec_num_blocks"]
         dec_proj = []
         for i in range(num_dec_blocks):
-            dec_proj.append(ResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
+            dec_proj.append(
+                DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
         self.dec_proj = nn.Sequential(*dec_proj)
 
         last_norm = cfg.get("last_norm", False)
@@ -108,11 +111,13 @@ class DINOContra(nn.Module):
         # b, 3, h, w = x.shape
         batch_size = x.shape[0]
         device = x.device
-        random_scale = torch.ones(batch_size, 3, 1, 1, dtype=torch.float32, device=device).uniform_(0.9, 1.1)  # noqa
+        random_scale = torch.ones(batch_size, 3, 1, 1, dtype=torch.float32, device=device).uniform_(0.9,
+                                                                                                    1.1)  # noqa # color
         random_offset = torch.ones(batch_size, 3, 1, 1, dtype=torch.float32, device=device).uniform_(-0.1, 0.1)  # noqa
         x_aug = x * random_scale + random_offset
+
         if random.randint(0, 3) == 0:  # 25%
-            x_aug = transforms.GaussianBlur(kernel_size=3)(x_aug)
+            x_aug = transforms.GaussianBlur(kernel_size=3)(x_aug)  # texture
         return x_aug
 
     def forward(self, img: torch.Tensor
@@ -158,7 +163,7 @@ class DINOContra(nn.Module):
             raise ValueError
         feat = self.vq_aggregate_proj(feat)  # (b, 384, 28, 28)
 
-        recon = self.dec_proj(feat)  # (2b, 384, 28, 28)
+        recon = self.dec_proj(feat)  # (b, 384, 28, 28)
         recon_loss = F.mse_loss(recon, dino_feat)
 
         output["recon-loss"] = recon_loss

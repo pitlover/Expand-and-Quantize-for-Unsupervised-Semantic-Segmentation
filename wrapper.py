@@ -38,6 +38,7 @@ class DINOUnSegWrapper(nn.Module):
             raise ValueError(f"Unsupported output type {self.output_type}.")
 
         self.output_dim = output_dim
+
         self.evaluator = UnSegEvaluator(
             output_dim, self.num_classes, self.extra_classes
         )

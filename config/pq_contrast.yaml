@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_PQ"
+  name: "CONTRAST_PQ_1024_1024"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -23,14 +23,14 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: false
-  enc_num_blocks: 3
+  enc_num_blocks: 1
   dec_num_blocks: 3
   hidden_dim: 1024
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 128, 2048 ]
-    embed_dims: [ 512, 512 ]
+    num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
+    embed_dims: [ 512,  512 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
@@ -38,7 +38,7 @@ model:
     use_gumbel: false
     decay: 0.99
     eps: 1.0e-5
-    num_pq: 8
+    num_pq: [ 2, 16 ]
     agg_type: "concat"  # add, concat
 
 # ---------------------------------------------------------------- #
@@ -68,7 +68,7 @@ dataloader:
     batch_size: 64  # total
     num_workers: 8  # total
   val:
-    batch_size: 16  # total
+    batch_size: 32  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
@@ -76,7 +76,7 @@ optimizer:
   model:
     name: "adamw"
     lr: 3.0e-4
-    weight_decay: 1.0e-6
+    weight_decay: 2.0
   cluster:
     name: "adam"
     lr: 3.0e-3
@@ -100,7 +100,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 100
+  max_epochs: 10
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0

@@ -39,6 +39,7 @@ class VectorQuantizer(nn.Module):
                  use_restart: bool = False,
                  use_gumbel: bool = False,
                  use_split: bool = False,
+                 use_weighted_sum: bool = False
                  ) -> None:
         super().__init__()
         self.num_codebook = num_codebook
@@ -57,6 +58,7 @@ class VectorQuantizer(nn.Module):
         self.use_restart = use_restart
         self.use_gumbel = use_gumbel
         self.use_split = use_split
+        self.use_weighted_sum = use_weighted_sum
         if use_split:
             raise NotImplementedError("NOT YET implemented. Currently only for EMA.")
 
@@ -187,6 +189,7 @@ class VectorQuantizer(nn.Module):
                f"normalize={self.normalize}, " \
                f"use_gumbel={self.use_gumbel}, " \
                f"use_split={self.use_split}, " \
+               f"use_weighted_sum={self.use_weighted_sum}, " \
                f"use_restart={self.use_restart}"
 
 
@@ -257,6 +260,7 @@ class EMAVectorQuantizer(nn.Module):
                  use_restart: bool = False,
                  use_gumbel: bool = False,
                  use_split: bool = False,
+                 use_weighted_sum: bool = False
                  ) -> None:
         super().__init__()
         self.num_codebook = num_codebook
@@ -281,6 +285,7 @@ class EMAVectorQuantizer(nn.Module):
         self.update_candidates = None  # placeholder
         # self._initialized = False
         self.jsd = JSDLoss(reduction="batchmean")
+        self.use_weighted_sum = use_weighted_sum
 
     @torch.no_grad()
     def prepare_restart(self, vq_current_count: torch.Tensor, z_flat: torch.Tensor) -> None:
@@ -442,8 +447,11 @@ class EMAVectorQuantizer(nn.Module):
             vq_indices = torch.argmin(distance, dim=1)  # (n,) : index of the closest code vector.
         distance_prob = F.softmax(-distance, dim=1)  # (n, K)
         # z_quantized = self.codebook(vq_indices)  # (n, d)
-        z_norm_quantized = F.embedding(vq_indices, codebook_norm)  # (n, d)
-        # z_norm_quantized = torch.matmul(distance_prob, codebook_norm)  # (n, d)
+
+        if self.use_weighted_sum:  # weighted-sum
+            z_norm_quantized = torch.matmul(distance_prob, codebook_norm)  # (n, d)
+        else:  # top 1
+            z_norm_quantized = F.embedding(vq_indices, codebook_norm)  # (n, d)
 
         output = dict()
 
@@ -497,9 +505,9 @@ class EMAVectorQuantizer(nn.Module):
         # output["jsd-loss"] = jsd_loss
         output["codebook-sum"] = torch.sum(torch.abs(self.codebook.weight))
 
-        # preserve gradients
-        # z_quantized = z_flat + (z_quantized - z_flat).detach()  # (n, d)
-        z_norm_quantized = z_norm + (z_norm_quantized - z_norm).detach()  # (n, d)
+        if not self.use_weighted_sum:
+            # z_quantized = z_flat + (z_quantized - z_flat).detach()  # (n, d)
+            z_norm_quantized = z_norm + (z_norm_quantized - z_norm).detach()  # (n, d)
 
         # reshape back to match original input shape
         # q = z_quantized.view(b, h, w, d).permute(0, 3, 1, 2).contiguous()
@@ -513,6 +521,7 @@ class EMAVectorQuantizer(nn.Module):
                f"normalize={self.normalize}, " \
                f"use_gumbel={self.use_gumbel}, " \
                f"use_split={self.use_split}, " \
+               f"use_weighted_sum={self.use_weighted_sum}, " \
                f"use_restart={self.use_restart}"
 
 
@@ -529,6 +538,7 @@ class ProductQuantizerWrapper(nn.Module):
                  use_restart: bool = False,
                  use_gumbel: bool = False,
                  use_split: bool = False,
+                 use_weighted_sum: bool = False,
                  quantizer_cls=EMAVectorQuantizer,
                  ) -> None:
         super().__init__()
@@ -541,7 +551,7 @@ class ProductQuantizerWrapper(nn.Module):
         self.quantizers = nn.ModuleList([
             quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize,
                           decay=decay, eps=eps,
-                          use_restart=use_restart, use_gumbel=use_gumbel, use_split=use_split)
+                          use_restart=use_restart, use_gumbel=use_gumbel, use_split=use_split, use_weighted_sum=use_weighted_sum)
             for _ in range(self.num_pq)
         ])
 

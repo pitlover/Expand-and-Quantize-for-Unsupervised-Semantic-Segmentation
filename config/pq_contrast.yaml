@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_PQ_1024_1024"
-  notes: ""
+  name: "CONTRAST_PQ_1024_1024_neg0.01"
+  notes: "pq (4, 16)"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -36,10 +36,12 @@ model:
     use_restart: false
     use_split: true
     use_gumbel: false
+    use_weighted_sum : false
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 2, 16 ]
+    num_pq: [ 4, 16 ]
     agg_type: "concat"  # add, concat
+
 
 # ---------------------------------------------------------------- #
 loss:

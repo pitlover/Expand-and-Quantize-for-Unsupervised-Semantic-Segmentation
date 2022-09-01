@@ -54,6 +54,7 @@ class EncResBlock(nn.Module):
             self.norm_shortcut = nn.Identity()
 
             self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
+
         else:
             self.norm_shortcut = None
             self.conv_shortcut = None

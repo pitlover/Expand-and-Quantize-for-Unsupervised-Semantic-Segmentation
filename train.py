@@ -20,7 +20,7 @@ from utils.param_utils import count_params, compute_param_norm
 from build import build_dataset, build_dataloader, build_model, build_optimizer, build_scheduler, \
     split_params_for_optimizer
 from model.metric import UnSegMetrics
-from wrapper import DINOUnSegWrapper
+from wrapper.UnsegWrapper import DINOUnSegWrapper
 
 
 def train_epoch(

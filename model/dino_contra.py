@@ -39,6 +39,7 @@ class DINOContra(nn.Module):
         self.use_restart = cfg["vq"].get("use_restart", False)
         self.use_split = cfg["vq"].get("use_split", False)
         self.use_gumbel = cfg["vq"].get("use_gumbel", False)
+        self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
         self.jsd = JSDLoss()
 
         self.num_pq = cfg["vq"].get("num_pq", 1)
@@ -46,7 +47,8 @@ class DINOContra(nn.Module):
             self.num_pq = [self.num_pq] * self.num_vq
 
         vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
-                         use_restart=self.use_restart, use_gumbel=self.use_gumbel, use_split=self.use_split)
+                         use_restart=self.use_restart, use_gumbel=self.use_gumbel, use_split=self.use_split,
+                         use_weighted_sum=self.use_weighted_sum)
 
         if self.vq_type == "ema":
             vq_kwargs["decay"] = cfg["vq"]["decay"]
@@ -175,7 +177,9 @@ class DINOContra(nn.Module):
         bottom_dis_prob_1, bottom_dis_prob_2 = torch.chunk(vq_bottom_dis_prob, chunks=2, dim=0)
         output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
 
-        output["contra-loss"] = output["contra-loss-pos"] - output["contra-loss-neg"] * 0.1  # TODO heuristic
+        # TODO heuristic
+        output["contra-loss"] = output["contra-loss-pos"] - output["contra-loss-neg"] * 0.01
+        # output["contra-loss"] = output["contra-loss-pos"]
 
         # split half
         feat = torch.chunk(feat, chunks=2, dim=0)[0]

@@ -12,7 +12,8 @@ from model.dino_unseg import DINOUnSeg
 from model.dino_contra import DINOContra
 from model.dino_stego import DINOStego
 from model.dino_info import DINOInfo
-from wrapper import DINOUnSegWrapper, StegoWrapper
+from wrapper.StegoWrapper import StegoWrapper
+from wrapper.UnsegWrapper import DINOUnSegWrapper
 
 
 def build_model(cfg: dict,

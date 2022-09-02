@@ -11,7 +11,7 @@ from data.dataset import UnSegDataset
 from model.dino_unseg import DINOUnSeg
 from model.dino_contra import DINOContra
 from model.dino_stego import DINOStego
-from model.dino_info import DINOInfo
+
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 

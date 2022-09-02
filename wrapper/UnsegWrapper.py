@@ -5,6 +5,10 @@ import torch.nn as nn
 from model.dino_unseg import DINOUnSeg
 from model.evaluator import UnSegEvaluator
 
+__all__ = [
+    "DINOUnSegWrapper"
+]
+
 
 class DINOUnSegWrapper(nn.Module):
 
@@ -83,4 +87,3 @@ class DINOUnSegWrapper(nn.Module):
 
     def restart(self):
         self.model.restart()
-

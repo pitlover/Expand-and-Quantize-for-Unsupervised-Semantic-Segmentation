@@ -446,12 +446,12 @@ class EMAVectorQuantizer(nn.Module):
         else:
             vq_indices = torch.argmin(distance, dim=1)  # (n,) : index of the closest code vector.
         distance_prob = F.softmax(-distance, dim=1)  # (n, K)
-        # z_quantized = self.codebook(vq_indices)  # (n, d)
 
         if self.use_weighted_sum:  # weighted-sum
             z_norm_quantized = torch.matmul(distance_prob, codebook_norm)  # (n, d)
         else:  # top 1
             z_norm_quantized = F.embedding(vq_indices, codebook_norm)  # (n, d)
+            # z_norm_quantized = self.codebook(vq_indices)  # (n, d) // normalize X
 
         output = dict()
 

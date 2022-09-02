@@ -4,6 +4,10 @@ import torch.nn as nn
 from model.dino_stego import DINOStego
 from model.evaluator import UnSegEvaluator
 
+__all__ = [
+    "StegoWrapper"
+]
+
 
 class StegoWrapper(nn.Module):
 

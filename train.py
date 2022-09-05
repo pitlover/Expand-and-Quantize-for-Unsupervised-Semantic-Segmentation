@@ -268,10 +268,8 @@ def run(cfg: Dict, debug: bool = False) -> None:
     device, local_rank = set_dist(device_type="cuda")
     if is_master():
         pprint.pprint(cfg)  # print config to check if all arguments are correctly given.
-
     save_dir = set_wandb(cfg, force_mode="disabled" if debug else None)
     set_seed(seed=cfg["seed"])
-
     # ======================================================================================== #
     # Data
     # ======================================================================================== #
@@ -280,7 +278,6 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
     valid_dataset = build_dataset(cfg["dataset"], mode="val")
     valid_dataloader = build_dataloader(cfg["dataloader"], valid_dataset, mode="val")
-
     # ======================================================================================== #
     # Model
     # ======================================================================================== #
@@ -293,7 +290,6 @@ def run(cfg: Dict, debug: bool = False) -> None:
         model_m = model.module  # actual model without wrapping
     else:
         model_m = model
-
     if is_master():
         print(model)
         p1, p2 = count_params(model_m.model.parameters(), requires_grad=True)

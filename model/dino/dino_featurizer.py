@@ -50,6 +50,7 @@ class DinoFeaturizer(nn.Module):
             state_dict = torch.hub.load_state_dict_from_url(url="https://dl.fbaipublicfiles.com/dino/" + url)
             self.backbone.load_state_dict(state_dict, strict=True)
 
+
         if arch == "vit_small":
             self.n_feats = 384
         else:

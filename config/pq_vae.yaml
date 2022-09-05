@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_PQ_1024_1024_contrastX"
+  name: "VAE_PQ_1024_1024"
   notes: "pq (4, 16)"
 
 # ---------------------------------------------------------------- #
@@ -25,7 +25,7 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 1024
+  hidden_dim: 512
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
@@ -36,7 +36,7 @@ model:
     use_restart: false
     use_split: true
     use_gumbel: false
-    use_weighted_sum : false
+    use_weighted_sum: false
     update_norm: true # check
     decay: 0.99
     eps: 1.0e-5
@@ -48,7 +48,7 @@ model:
 loss:
   recon_weight: 1.0
   vq_weight: 10.0
-  contra_weight: 0.0
+  contra_weight: 10.0
 
 # ---------------------------------------------------------------- #
 dataset:
@@ -68,11 +68,11 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
-    num_workers: 8  # total
+    batch_size: 128  # total
+    num_workers: 4  # total
   val:
     batch_size: 32  # total
-    num_workers: 8  # total
+    num_workers: 4  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
@@ -107,4 +107,4 @@ train:
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0
-  num_accum: 2
+  num_accum: 1

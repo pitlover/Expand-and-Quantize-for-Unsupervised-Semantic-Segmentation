@@ -39,7 +39,8 @@ class VectorQuantizer(nn.Module):
                  use_restart: bool = False,
                  use_gumbel: bool = False,
                  use_split: bool = False,
-                 use_weighted_sum: bool = False
+                 use_weighted_sum: bool = False,
+                 update_norm: bool = True
                  ) -> None:
         super().__init__()
         self.num_codebook = num_codebook
@@ -59,6 +60,7 @@ class VectorQuantizer(nn.Module):
         self.use_gumbel = use_gumbel
         self.use_split = use_split
         self.use_weighted_sum = use_weighted_sum
+        self.update_norm = update_norm
         if use_split:
             raise NotImplementedError("NOT YET implemented. Currently only for EMA.")
 
@@ -190,6 +192,7 @@ class VectorQuantizer(nn.Module):
                f"use_gumbel={self.use_gumbel}, " \
                f"use_split={self.use_split}, " \
                f"use_weighted_sum={self.use_weighted_sum}, " \
+               f"update_norm={self.update_norm}, " \
                f"use_restart={self.use_restart}"
 
 
@@ -218,11 +221,9 @@ class EmbeddingEMA(nn.Module):
         self.weight_avg.data.copy_(self.weight.data)
         self.vq_count.fill_(0)
 
-    def forward(self, indices: torch.Tensor, is_sum: bool = False) -> torch.Tensor:
-        if is_sum:
-            embeded = torch.matmul(indices, self.weight)
-        else:
-            embeded = F.embedding(indices, self.weight)
+    def forward(self, indices: torch.Tensor) -> torch.Tensor:
+        embeded = F.embedding(indices, self.weight)
+
         return embeded
 
     def update(self, vq_current_count, vq_current_sum) -> None:
@@ -260,7 +261,8 @@ class EMAVectorQuantizer(nn.Module):
                  use_restart: bool = False,
                  use_gumbel: bool = False,
                  use_split: bool = False,
-                 use_weighted_sum: bool = False
+                 use_weighted_sum: bool = False,
+                 update_norm: bool = True
                  ) -> None:
         super().__init__()
         self.num_codebook = num_codebook
@@ -286,6 +288,7 @@ class EMAVectorQuantizer(nn.Module):
         # self._initialized = False
         self.jsd = JSDLoss(reduction="batchmean")
         self.use_weighted_sum = use_weighted_sum
+        self.update_norm = update_norm
 
     @torch.no_grad()
     def prepare_restart(self, vq_current_count: torch.Tensor, z_flat: torch.Tensor) -> None:
@@ -450,8 +453,10 @@ class EMAVectorQuantizer(nn.Module):
         if self.use_weighted_sum:  # weighted-sum
             z_norm_quantized = torch.matmul(distance_prob, codebook_norm)  # (n, d)
         else:  # top 1
-            z_norm_quantized = F.embedding(vq_indices, codebook_norm)  # (n, d)
-            # z_norm_quantized = self.codebook(vq_indices)  # (n, d) // normalize X
+            if self.update_norm:
+                z_norm_quantized = F.embedding(vq_indices, codebook_norm)  # (n, d)
+            else:
+                z_norm_quantized = self.codebook(vq_indices)  # (n, d) // normalize X
 
         output = dict()
 
@@ -539,6 +544,7 @@ class ProductQuantizerWrapper(nn.Module):
                  use_gumbel: bool = False,
                  use_split: bool = False,
                  use_weighted_sum: bool = False,
+                 update_norm: bool = True,
                  quantizer_cls=EMAVectorQuantizer,
                  ) -> None:
         super().__init__()
@@ -551,7 +557,8 @@ class ProductQuantizerWrapper(nn.Module):
         self.quantizers = nn.ModuleList([
             quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize,
                           decay=decay, eps=eps,
-                          use_restart=use_restart, use_gumbel=use_gumbel, use_split=use_split, use_weighted_sum=use_weighted_sum)
+                          use_restart=use_restart, use_gumbel=use_gumbel, use_split=use_split,
+                          use_weighted_sum=use_weighted_sum, update_norm=update_norm)
             for _ in range(self.num_pq)
         ])
 

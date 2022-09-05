@@ -30,15 +30,14 @@ def set_dist(device_type: str = "cuda") -> Tuple[torch.device, int]:
         return torch.device("cpu"), 0
     if device_type != "cuda":
         raise ValueError("Distributed setting either support CPU or CUDA.")
-
     if os.environ.get("LOCAL_RANK", -1) == -1:  # not called by torchrun, do not initialize dist.
         return torch.device("cuda"), 0  # single GPU
-
     if not dist.is_initialized():
         dist.init_process_group(backend="nccl", timeout=datetime.timedelta(minutes=3))
     local_rank = dist.get_rank()
     device = torch.device("cuda", local_rank)
     torch.cuda.set_device(device)  # needed!
+
     return device, local_rank
 
 

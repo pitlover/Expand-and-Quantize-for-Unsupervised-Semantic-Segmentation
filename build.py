@@ -11,6 +11,7 @@ from data.dataset import UnSegDataset
 from model.dino_unseg import DINOUnSeg
 from model.dino_contra import DINOContra
 from model.dino_stego import DINOStego
+from model.dino_vae import DINOVae
 
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
@@ -23,6 +24,8 @@ def build_model(cfg: dict,
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
     elif "contra" in name:
         model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
+    elif "vae" in name:
+        model = DINOUnSegWrapper(cfg, DINOVae(cfg["model"]))
     elif "stego" in name:
         model = StegoWrapper(cfg, DINOStego(cfg["model"]))
     else:

@@ -50,8 +50,6 @@ def set_wandb(cfg: Dict, force_mode: Optional[str] = None) -> Optional[str]:
         wandb_path = wandb.run.dir if (wandb_mode != "disabled") else save_dir
     else:
         wandb_path = None
-
     if is_distributed_set():  # sync save path to every thread.
         wandb_path = broadcast_objects([wandb_path], src_rank=0)[0]
-
     return wandb_path

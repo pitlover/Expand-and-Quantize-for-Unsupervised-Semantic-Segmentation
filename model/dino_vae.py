@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
+from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d, ResBlock
 from model.loss import JSDLoss
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer, ProductQuantizerWrapper
 
@@ -29,9 +29,12 @@ class DINOVae(nn.Module):
 
         self.enc_proj_bottom = nn.Sequential(*enc_proj)
         self.enc_proj_top = nn.Sequential(
-            nn.Conv2d(self.hidden_dim, self.hidden_dim // 2, 4, stride=2, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(self.hidden_dim // 2, self.hidden_dim, 3, padding=1)
+            # nn.LeakyReLU(0.1, inplace=True),
+            nn.Conv2d(self.hidden_dim, self.hidden_dim // 4, 4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            # nn.LeakyReLU(0.1, inplace=True),
+            nn.Conv2d(self.hidden_dim // 4, self.hidden_dim, 3, padding=1)
         )
 
         # -------- vq -------- #
@@ -79,42 +82,71 @@ class DINOVae(nn.Module):
 
         # -------- vq connections -------- #
         vq_input_proj = []
-        for i in range(self.num_vq):
+        for i in range(self.num_vq - 1):
             vq_input_proj.append(nn.Sequential(
-                nn.LeakyReLU(0.1, inplace=False),  # MOVED TO HERE
-                nn.Conv2d(self.hidden_dim, vq_embed_dims[i], 1, 1, 0, bias=False),
+                nn.ReLU(inplace=True),
+                # nn.LeakyReLU(0.1, inplace=True),  # MOVED TO HERE
+                nn.Conv2d(self.hidden_dim * (i + 1), vq_embed_dims[i], 1, 1, 0, bias=False),
             ))
         self.vq_input_proj = nn.ModuleList(vq_input_proj)
-
-        vq_output_proj = []
-        for i in range(self.num_vq):
-            vq_output_proj.append(nn.Sequential(
-                nn.Conv2d(self.hidden_dim + vq_embed_dims[i], self.hidden_dim, 1, 1, 0),
-                # nn.ReLU(inplace=True)  # ORIGINALLY HERE
-                # nn.LeakyReLU(0.1, inplace=True)
-            ))
-        self.vq_output_proj = nn.ModuleList(vq_output_proj)
-
-        self.upsample = nn.ConvTranspose2d(
+        self.upsample_t = nn.ConvTranspose2d(
             vq_embed_dims[0], vq_embed_dims[0], 4, stride=2, padding=1
         )
         self.agg_type = cfg["vq"].get("agg_type", "concat")
-        if (self.agg_type == "cat") or (self.agg_type == "concat"):
-            self.agg_type = "concat"
-            self.vq_aggregate_proj = nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 1, 1, 0)
-        elif (self.agg_type == "add") or (self.agg_type == "sum"):
-            self.agg_type = "add"
-            self.vq_aggregate_proj = nn.Conv2d(self.hidden_dim, self.hidden_dim, 1, 1, 0)
-        else:
-            raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
+        # if (self.agg_type == "cat") or (self.agg_type == "concat"):
+        #     self.agg_type = "concat"
+        #     self.vq_aggregate_proj = nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 1, 1, 0)
+        # elif (self.agg_type == "add") or (self.agg_type == "sum"):
+        #     self.agg_type = "add"
+        #     self.vq_aggregate_proj = nn.Conv2d(self.hidden_dim, self.hidden_dim, 1, 1, 0)
+        # else:
+        #     raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
+
+        aggregate_block = [
+            nn.Conv2d(self.hidden_dim + vq_embed_dims[0], vq_embed_dims[1], 1, 1, 0)]  # (hidden+embed -> embed)
+        self.aggregate = nn.Sequential(*aggregate_block)
 
         # -------- decoder -------- #
         num_dec_blocks = cfg["dec_num_blocks"]
-        dec_proj = []
+
+        # dec_proj_top = []
+        # for i in range(num_dec_blocks):
+        #     dec_proj_top.append(
+        #         DecResBlock(vq_embed_dims[0], vq_embed_dims[0]))
+        # dec_proj_top.append(
+        #     nn.ConvTranspose2d(vq_embed_dims[0], vq_embed_dims[0], 4, stride=2, padding=1)
+        # )
+        #
+        # self.dec_proj_top = nn.Sequential(*dec_proj_top)
+
+        dec_proj_top = [nn.Conv2d(vq_embed_dims[0], vq_embed_dims[0] // 4, 3, padding=1)]
+        # # TODO decoder fix
+        for i in range(num_dec_blocks):
+            dec_proj_top.append(
+                ResBlock(vq_embed_dims[0] // 4, vq_embed_dims[0] // 4))
+        dec_proj_top.append(nn.ReLU(inplace=True))
+        # dec_proj_top.append(nn.LeakyReLU(0.1, inplace=True))
+        dec_proj_top.append(
+            nn.ConvTranspose2d(vq_embed_dims[0] // 4, vq_embed_dims[0], 4, stride=2, padding=1)
+        )
+        self.dec_proj_top = nn.Sequential(*dec_proj_top)
+
+        ## total decoder
+        dec_proj = [nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 3, padding=1)]
         for i in range(num_dec_blocks):
             dec_proj.append(
-                DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
+                ResBlock(self.hidden_dim, self.hidden_dim // 4))
+        dec_proj.append(nn.ReLU(inplace=True))
+        # dec_proj.append(nn.LeakyReLU(0.1, inplace=True))
+        dec_proj.append(nn.Conv2d(self.hidden_dim, self.feat_dim, 1, 1, 0, bias=True))
         self.dec_proj = nn.Sequential(*dec_proj)
+
+        # dec_proj = [nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 3, padding=1)]
+        # for i in range(num_dec_blocks):
+        #     dec_proj_top.append(
+        #         DecResBlock(vq_embed_dims[0] if i == 0 else self.hidden_dim, self.hidden_dim))
+        # dec_proj.append(nn.Conv2d(self.hidden_dim, self.feat_dim, 1, 1, 0, bias=True))
+        # self.dec_proj = nn.Sequential(*dec_proj)
 
         last_norm = cfg.get("last_norm", False)
         self.dec_norm = LayerNorm2d(self.feat_dim) if last_norm else None
@@ -146,41 +178,36 @@ class DINOVae(nn.Module):
         feat_bottom = self.enc_proj_bottom(dino_feat)
         feat_top = self.enc_proj_top(feat_bottom)
 
-        print('feat_bottom : ', feat_bottom.shape)
-        print("feat_top : ", feat_top.shape)
-
         output = dict()
         feat_vqs = []
 
-        feat_0 = self.vq_input_proj[0](feat_top)
+        feat_0 = self.vq_input_proj[0](feat_top)  # hidden_dim -> embed_dim
 
         feat_vq_0, vq_output_0, vq_top_dis_prob = self.vq_blocks[0](feat_0)
-        print(feat_0.shape, feat_vq_0.shape, vq_top_dis_prob.shape)
+
         feat_vqs.append(feat_vq_0)
 
         for k, v in vq_output_0.items():
             output[f"vq{0}-{k}"] = v
 
-        upsample_feat_vq_0 = self.upsample(feat_vq_0)
-        print("upsample_feat_vq_0", upsample_feat_vq_0.shape)
-        concat_feat = torch.cat([feat_bottom, upsample_feat_vq_0], dim=1)
-        print("Concat_feat", concat_feat.shape)
-        feat_1 = self.vq_output_proj[1](concat_feat)
-        print("feat_1", feat_1.shape)
+        dec_feat_vq_0 = self.dec_proj_top(feat_vq_0)
+        concat_feat = torch.cat([feat_bottom, dec_feat_vq_0], dim=1)
+        feat_1 = self.aggregate(concat_feat)
         feat_vq_1, vq_output_1, vq_bottom_dis_prob = self.vq_blocks[1](feat_1)
-        print(feat_vq_1.shape, vq_bottom_dis_prob.shape)
-        exit()
+
         feat_vqs.append(feat_vq_1)
         for k, v in vq_output_1.items():
             output[f"vq{1}-{k}"] = v
 
+        upsample_feat_vq_top = self.upsample_t(feat_vq_0)  # (b, embed_dim, 14, 14) ->  (b, embed_dim, 28, 28)
+        feat_vqs[0] = upsample_feat_vq_top
         if self.agg_type == "concat":
             feat = torch.cat(feat_vqs, dim=1)
         elif self.agg_type == "add":
             feat = sum(feat_vqs)
         else:
             raise ValueError
-        feat = self.vq_aggregate_proj(feat)  # (b, 384, 28, 28)
+        # feat = self.vq_aggregate_proj(feat)  # (b, 384, 28, 28)
 
         recon = self.dec_proj(feat)  # (b, 384, 28, 28)
         recon_loss = F.mse_loss(recon, dino_feat)

@@ -3,7 +3,7 @@ wandb:
   project: "Jigmentation"
   mode: "online"
   name: "VAE_PQ_1024_1024"
-  notes: "pq (4, 16)"
+  notes: ""
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -24,13 +24,13 @@ model:
     pretrained_weights: null
     dropout: false
   enc_num_blocks: 1
-  dec_num_blocks: 3
-  hidden_dim: 512
+  dec_num_blocks: 1
+  hidden_dim: 384
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
-    embed_dims: [ 512,  512 ]
+    num_codebooks: [ 1024,  1024 ]
+    embed_dims: [ 128,  512 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
@@ -48,7 +48,7 @@ model:
 loss:
   recon_weight: 1.0
   vq_weight: 10.0
-  contra_weight: 10.0
+  contra_weight: 0.0
 
 # ---------------------------------------------------------------- #
 dataset:

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-__all__ = ["EncResBlock", "DecResBlock", "LayerNorm2d"]
+__all__ = ["EncResBlock", "DecResBlock", "LayerNorm2d", "ResBlock"]
 
 
 class LayerNorm2d(nn.LayerNorm):
@@ -29,8 +29,8 @@ class EncResBlock(nn.Module):
         # self.norm1 = LayerNorm2d(in_channel)
         self.norm1 = nn.Identity()
 
-        # self.act1 = nn.ReLU(inplace=True)
-        self.act1 = nn.LeakyReLU(0.1, inplace=True)
+        self.act1 = nn.ReLU(inplace=True)
+        # self.act1 = nn.LeakyReLU(0.1, inplace=True)  # TODO check
         # self.act1 = nn.Identity()
 
         self.conv1 = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=True)
@@ -41,8 +41,8 @@ class EncResBlock(nn.Module):
         # self.norm2 = LayerNorm2d(in_channel)
         self.norm2 = nn.Identity()
 
-        # self.act2 = nn.ReLU(inplace=True)
-        self.act2 = nn.LeakyReLU(0.1, inplace=True)
+        self.act2 = nn.ReLU(inplace=True)
+        # self.act2 = nn.LeakyReLU(0.1, inplace=True)
 
         # self.conv2 = nn.Conv2d(in_channel, out_channel, 3, 1, 1, bias=False)
         self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=True)
@@ -138,3 +138,22 @@ class DecResBlock(nn.Module):
 
         x = x + identity
         return x
+
+
+class ResBlock(nn.Module):
+    def __init__(self, in_channel, channel):
+        super().__init__()
+
+        self.conv = nn.Sequential(
+            nn.ReLU(inplace=True),
+            # nn.LeakyReLU(0.1, inplace=True),
+            nn.Conv2d(in_channel, channel, 3, padding=1),
+            nn.ReLU(inplace=True),
+            # nn.LeakyReLU(0.1, inplace=True),
+            nn.Conv2d(channel, in_channel, 1),
+        )
+
+    def forward(self, input):
+        out = self.conv(input)
+        out += input
+        return out

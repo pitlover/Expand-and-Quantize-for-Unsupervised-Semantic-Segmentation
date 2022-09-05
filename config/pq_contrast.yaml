@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ex1"
-  notes: "PQ_1024_1024_contrast10.0_pq(1, 16)"
+  name: "CONTRAST_ex2"
+  notes: "PQ_1024_1024_contrast10.0_pq(4, 16)_hidden_384"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -25,7 +25,7 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 1024
+  hidden_dim: 384
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
@@ -40,7 +40,7 @@ model:
     update_norm: true # check
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 1, 16 ]
+    num_pq: [ 4, 16 ]
     agg_type: "concat"  # add, concat
 
 

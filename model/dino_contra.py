@@ -71,16 +71,8 @@ class DINOContra(nn.Module):
         self.vq_blocks = nn.ModuleList(vq_blocks)
 
         # -------- vq connections -------- #
-        # vq_input_proj = []
-        # for i in range(self.num_vq):
-        #     vq_input_proj.append(nn.Sequential(
-        #         nn.LeakyReLU(0.1, inplace=False),  # MOVED TO HERE
-        #         nn.Conv2d(self.hidden_dim, vq_embed_dims[i], 1, 1, 0, bias=False),
-        #     ))
-        # self.vq_input_proj = nn.ModuleList(vq_input_proj)
-
         vq_input_proj = []
-        for i in range(self.num_vq-1):
+        for i in range(self.num_vq):
             vq_input_proj.append(nn.Sequential(
                 nn.LeakyReLU(0.1, inplace=False),  # MOVED TO HERE
                 nn.Conv2d(self.hidden_dim, vq_embed_dims[i], 1, 1, 0, bias=False),
@@ -149,12 +141,7 @@ class DINOContra(nn.Module):
         vq_bottom_dis_prob = None  # placeholder
 
         for i in range(self.num_vq):
-            ## 9/6
-            if i == 0:
-                feat_i = feat
-            else:
-                feat_i = self.vq_input_proj[0](feat)
-            # feat_i = self.vq_input_proj[i](feat)
+            feat_i = self.vq_input_proj[i](feat)
             feat_vq_i, vq_i_output, dis_prob = self.vq_blocks[i](feat_i)
             if i == 0:
                 vq_top_dis_prob = dis_prob
@@ -168,6 +155,7 @@ class DINOContra(nn.Module):
 
             if i < self.num_vq - 1:
                 feat_i = torch.cat([feat, feat_vq_i], dim=1)
+                feat_i = feat_i.clone().detach() # TODO detach
                 feat = self.vq_output_proj[i](feat_i)
 
         if self.agg_type == "concat":
@@ -191,7 +179,7 @@ class DINOContra(nn.Module):
         output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
 
         # TODO heuristic
-        output["contra-loss"] = output["contra-loss-pos"] - output["contra-loss-neg"] * 0.01
+        output["contra-loss"] = output["contra-loss-pos"] + (1 - output["contra-loss-neg"]) * 0.1
         # output["contra-loss"] = output["contra-loss-pos"]
 
         # split half

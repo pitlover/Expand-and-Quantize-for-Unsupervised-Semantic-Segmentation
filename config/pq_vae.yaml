@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "VAE_PQ_1024_1024"
-  notes: ""
+  name: "VAE_ex3_kernel1"
+  notes: "PQ_1024_1024_contrast10.0_pq(1, 16)"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -30,7 +30,7 @@ model:
   vq:
     vq_type: "ema"  # ema, param
     num_codebooks: [ 1024,  1024 ]
-    embed_dims: [ 128,  512 ]
+    embed_dims: [ 512,  512 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
@@ -68,7 +68,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 64  # total
     num_workers: 4  # total
   val:
     batch_size: 32  # total
@@ -107,4 +107,4 @@ train:
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0
-  num_accum: 1
+  num_accum: 2

@@ -52,6 +52,8 @@ class EncResBlock(nn.Module):
             # self.norm_shortcut = nn.GroupNorm(num_groups=16, num_channels=in_channel)
             # self.norm_shortcut = LayerNorm2d(in_channel)
             self.norm_shortcut = nn.Identity()
+            self.act_shortcut = nn.Identity()
+            # self.act_shortcut = nn.ReLU(inplace=True)
 
             self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
 
@@ -71,6 +73,7 @@ class EncResBlock(nn.Module):
 
         if self.conv_shortcut is not None:
             identity = self.norm_shortcut(identity)
+            identity = self.act_shortcut(identity)
             identity = self.conv_shortcut(identity)
         x = x + identity
 
@@ -109,10 +112,10 @@ class DecResBlock(nn.Module):
         self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=True)
 
         if in_channel != out_channel:
-            self.norm_shortcut = nn.BatchNorm2d(in_channel)
+            # self.norm_shortcut = nn.BatchNorm2d(in_channel)
             # self.norm_shortcut = nn.GroupNorm(num_groups=16, num_channels=in_channel)
             # self.norm_shortcut = LayerNorm2d(in_channel)
-            # self.norm_shortcut = nn.Identity()
+            self.norm_shortcut = nn.Identity()
 
             # self.act_shortcut = nn.ReLU(inplace=True)  # TODO check
             self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
@@ -147,7 +150,8 @@ class ResBlock(nn.Module):
         self.conv = nn.Sequential(
             nn.ReLU(inplace=True),
             # nn.LeakyReLU(0.1, inplace=True),
-            nn.Conv2d(in_channel, channel, 3, padding=1),
+            nn.Conv2d(in_channel, channel, 1),
+            # nn.Conv2d(in_channel, channel, 3, padding=1),
             nn.ReLU(inplace=True),
             # nn.LeakyReLU(0.1, inplace=True),
             nn.Conv2d(channel, in_channel, 1),

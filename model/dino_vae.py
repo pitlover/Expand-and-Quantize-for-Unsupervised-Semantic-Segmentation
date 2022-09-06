@@ -34,7 +34,7 @@ class DINOVae(nn.Module):
             nn.Conv2d(self.hidden_dim, self.hidden_dim // 4, 4, stride=2, padding=1),
             nn.ReLU(inplace=True),
             # nn.LeakyReLU(0.1, inplace=True),
-            nn.Conv2d(self.hidden_dim // 4, self.hidden_dim, 3, padding=1)
+            nn.Conv2d(self.hidden_dim // 4, self.hidden_dim, 1)
         )
 
         # -------- vq -------- #
@@ -119,7 +119,8 @@ class DINOVae(nn.Module):
         #
         # self.dec_proj_top = nn.Sequential(*dec_proj_top)
 
-        dec_proj_top = [nn.Conv2d(vq_embed_dims[0], vq_embed_dims[0] // 4, 3, padding=1)]
+        dec_proj_top = [nn.Conv2d(vq_embed_dims[0], vq_embed_dims[0] // 4, 1)]
+        # dec_proj_top = [nn.Conv2d(vq_embed_dims[0], vq_embed_dims[0] // 4, 3, padding=1)]
         # # TODO decoder fix
         for i in range(num_dec_blocks):
             dec_proj_top.append(
@@ -132,7 +133,8 @@ class DINOVae(nn.Module):
         self.dec_proj_top = nn.Sequential(*dec_proj_top)
 
         ## total decoder
-        dec_proj = [nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 3, padding=1)]
+        dec_proj = [nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 1)]
+        # dec_proj = [nn.Conv2d(sum(vq_embed_dims), self.hidden_dim, 3, padding=1)]
         for i in range(num_dec_blocks):
             dec_proj.append(
                 ResBlock(self.hidden_dim, self.hidden_dim // 4))

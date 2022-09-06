@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ex2_384 (4,16) _ dec_BNX"
+  name: "CONTRAST_ex2_384 (4,16) _ dec_BNX_hiddenX"
   notes: "PQ_1024_1024_contrast10.0"
 
 # ---------------------------------------------------------------- #
@@ -29,14 +29,14 @@ model:
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
-    embed_dims: [ 512,  512 ]
+    num_codebooks: [ 1024, 1024 ] # 2048 -> 1024
+    embed_dims: [ 384, 384 ]
     beta: 0.25
-    normalize: "l2"  # l2, z_norm, z_trainable, none
+    normalize: "none"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_split: true
     use_gumbel: false
-    use_weighted_sum : false
+    use_weighted_sum: false
     update_norm: true # check default : true
     decay: 0.99
     eps: 1.0e-5

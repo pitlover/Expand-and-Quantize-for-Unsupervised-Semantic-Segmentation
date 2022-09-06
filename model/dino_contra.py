@@ -71,8 +71,16 @@ class DINOContra(nn.Module):
         self.vq_blocks = nn.ModuleList(vq_blocks)
 
         # -------- vq connections -------- #
+        # vq_input_proj = []
+        # for i in range(self.num_vq):
+        #     vq_input_proj.append(nn.Sequential(
+        #         nn.LeakyReLU(0.1, inplace=False),  # MOVED TO HERE
+        #         nn.Conv2d(self.hidden_dim, vq_embed_dims[i], 1, 1, 0, bias=False),
+        #     ))
+        # self.vq_input_proj = nn.ModuleList(vq_input_proj)
+
         vq_input_proj = []
-        for i in range(self.num_vq):
+        for i in range(self.num_vq-1):
             vq_input_proj.append(nn.Sequential(
                 nn.LeakyReLU(0.1, inplace=False),  # MOVED TO HERE
                 nn.Conv2d(self.hidden_dim, vq_embed_dims[i], 1, 1, 0, bias=False),
@@ -141,7 +149,12 @@ class DINOContra(nn.Module):
         vq_bottom_dis_prob = None  # placeholder
 
         for i in range(self.num_vq):
-            feat_i = self.vq_input_proj[i](feat)
+            ## 9/6
+            if i == 0:
+                feat_i = feat
+            else:
+                feat_i = self.vq_input_proj[0](feat)
+            # feat_i = self.vq_input_proj[i](feat)
             feat_vq_i, vq_i_output, dis_prob = self.vq_blocks[i](feat_i)
             if i == 0:
                 vq_top_dis_prob = dis_prob

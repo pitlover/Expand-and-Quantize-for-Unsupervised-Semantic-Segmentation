@@ -27,7 +27,8 @@ class DINOUnSegWrapper(nn.Module):
         self.num_vq = self.model.num_vq
         self.recon_weight = cfg["loss"]["recon_weight"]
         self.vq_weight = cfg["loss"]["vq_weight"]
-        self.contra_weight = cfg["loss"].get("contra_weight", 0.0)
+        self.contra_pos_weight = cfg["loss"]["contra_weight"].get("pos", 0.0)
+        self.contra_neg_weight = cfg["loss"]["contra_weight"].get("neg", 0.0)
         self.stego_weight = cfg["loss"].get("stego_weight", 0.0)
         self.output_type = cfg["eval"]["output_type"]
 
@@ -59,7 +60,8 @@ class DINOUnSegWrapper(nn.Module):
 
         # if self.contra_weight > 0:
         #     model_loss += (output["contra-loss"] * self.contra_weight)
-        model_loss += (output["contra-loss"] * self.contra_weight)
+        model_loss += (output["contra-loss-pos"] * self.contra_pos_weight + output[
+            "contra-loss-neg"] * self.contra_neg_weight)
 
         if self.stego_weight > 0:
             model_loss += (output["stego-loss"] * self.stego_weight)

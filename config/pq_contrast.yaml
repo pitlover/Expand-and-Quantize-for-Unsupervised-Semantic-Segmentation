@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_detach_384(4,16)_dec_0:0.1"
-  notes: "PQ_1024_1024_contrast10.0"
+  name: "CONTRAST_ex2"
+  notes: "PQ_1024_1024_contrast10.0_pq(4, 16)_hidden_384"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -29,15 +29,15 @@ model:
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024, 1024 ] # 2048 -> 1024
-    embed_dims: [ 512, 512 ]
+    num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
+    embed_dims: [ 512,  512 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_split: true
     use_gumbel: false
     use_weighted_sum: false
-    update_norm: true # check default : true
+    update_norm: true # check
     decay: 0.99
     eps: 1.0e-5
     num_pq: [ 4, 16 ]
@@ -47,8 +47,10 @@ model:
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  vq_weight: 10.0
-  contra_weight: 10.0
+  vq_weight: 1.0
+  contra_weight:
+    pos: 0.0
+    neg: 0.0
 
 # ---------------------------------------------------------------- #
 dataset:

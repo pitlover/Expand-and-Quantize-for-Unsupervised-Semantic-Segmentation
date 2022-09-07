@@ -29,8 +29,8 @@ class EncResBlock(nn.Module):
         # self.norm1 = LayerNorm2d(in_channel)
         self.norm1 = nn.Identity()
 
-        self.act1 = nn.ReLU(inplace=True)
-        # self.act1 = nn.LeakyReLU(0.1, inplace=True)  # TODO check
+        # self.act1 = nn.ReLU(inplace=True)
+        self.act1 = nn.LeakyReLU(0.1, inplace=True)  # TODO check
         # self.act1 = nn.Identity()
 
         self.conv1 = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=True)
@@ -41,8 +41,8 @@ class EncResBlock(nn.Module):
         # self.norm2 = LayerNorm2d(in_channel)
         self.norm2 = nn.Identity()
 
-        self.act2 = nn.ReLU(inplace=True)
-        # self.act2 = nn.LeakyReLU(0.1, inplace=True)
+        # self.act2 = nn.ReLU(inplace=True)
+        self.act2 = nn.LeakyReLU(0.1, inplace=True)
 
         # self.conv2 = nn.Conv2d(in_channel, out_channel, 3, 1, 1, bias=False)
         self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=True)

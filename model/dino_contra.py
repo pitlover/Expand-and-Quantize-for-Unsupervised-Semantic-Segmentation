@@ -7,7 +7,7 @@ import torch.nn.functional as F  # noqa
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import JSDLoss
-from model.quantizer import VectorQuantizer, EMAVectorQuantizer, ProductQuantizerWrapper
+from model.quantizer_v2 import VectorQuantizer, EMAVectorQuantizer, ProductQuantizerWrapper
 
 import torchvision.transforms as transforms
 
@@ -155,7 +155,7 @@ class DINOContra(nn.Module):
 
             if i < self.num_vq - 1:
                 feat_i = torch.cat([feat, feat_vq_i], dim=1)
-                feat_i = feat_i.clone().detach() # TODO detach
+                # feat_i = feat_i.clone().detach() # TODO detach
                 feat = self.vq_output_proj[i](feat_i)
 
         if self.agg_type == "concat":
@@ -179,7 +179,7 @@ class DINOContra(nn.Module):
         output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
 
         # TODO heuristic
-        output["contra-loss"] = output["contra-loss-pos"] + (1 - output["contra-loss-neg"]) * 0.1
+        # output["contra-loss"] = output["contra-loss-pos"] - output["contra-loss-neg"] * 1.0
         # output["contra-loss"] = output["contra-loss-pos"]
 
         # split half

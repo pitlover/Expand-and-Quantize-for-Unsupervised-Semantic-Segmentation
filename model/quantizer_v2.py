@@ -462,10 +462,7 @@ class EMAVectorQuantizer(nn.Module):
 
         if self.training:
             with torch.no_grad():
-                if self.use_weighted_sum:
-                    vq_indices_one_hot = distance_prob
-                else:
-                    vq_indices_one_hot = F.one_hot(vq_indices, self.num_codebook).to(z.dtype)  # (n, K)
+                vq_indices_one_hot = F.one_hot(vq_indices, self.num_codebook).to(z.dtype)  # (n, K)
                 vq_current_count = torch.sum(vq_indices_one_hot, dim=0)  # (K,)
                 vq_current_sum = torch.matmul(vq_indices_one_hot.t(), z_flat)  # (K, n) x (n, d) = (K, d)
 

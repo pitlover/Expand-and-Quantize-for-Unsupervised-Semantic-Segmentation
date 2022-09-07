@@ -155,7 +155,6 @@ class DINOContra(nn.Module):
 
             if i < self.num_vq - 1:
                 feat_i = torch.cat([feat, feat_vq_i], dim=1)
-                # feat_i = feat_i.clone().detach() # TODO detach
                 feat = self.vq_output_proj[i](feat_i)
 
         if self.agg_type == "concat":
@@ -178,9 +177,6 @@ class DINOContra(nn.Module):
         bottom_dis_prob_1, bottom_dis_prob_2 = torch.chunk(vq_bottom_dis_prob, chunks=2, dim=0)
         output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
 
-        # TODO heuristic
-        # output["contra-loss"] = output["contra-loss-pos"] - output["contra-loss-neg"] * 1.0
-        # output["contra-loss"] = output["contra-loss-pos"]
 
         # split half
         feat = torch.chunk(feat, chunks=2, dim=0)[0]

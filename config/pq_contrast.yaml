@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ex2"
-  notes: "PQ_1024_1024_contrast10.0_pq(4, 16)_hidden_384"
+  name: "CONTRAST_ema_top1_1:1"
+  notes: "PQ_1024_1024_contrastX_pq(4, 16)_hidden_384"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -36,7 +36,7 @@ model:
     use_restart: false
     use_split: true
     use_gumbel: false
-    use_weighted_sum: false
+    use_weighted_sum: true
     update_norm: true # check
     decay: 0.99
     eps: 1.0e-5

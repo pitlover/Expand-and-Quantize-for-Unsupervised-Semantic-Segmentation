@@ -448,7 +448,7 @@ class EMAVectorQuantizer(nn.Module):
             vq_indices = torch.argmax(distance_prob_gumbel, dim=1)
         else:
             vq_indices = torch.argmin(distance, dim=1)  # (n,) : index of the closest code vector.
-        distance_prob = F.softmax(-distance, dim=1)  # (n, K)
+        distance_prob = F.softmax(-distance * 1.0, dim=1)  # (n, K) # TODO scaling
 
         if self.use_weighted_sum:  # weighted-sum
             z_norm_quantized = torch.matmul(distance_prob, codebook_norm)  # (n, d)
@@ -462,7 +462,11 @@ class EMAVectorQuantizer(nn.Module):
 
         if self.training:
             with torch.no_grad():
-                vq_indices_one_hot = F.one_hot(vq_indices, self.num_codebook).to(z.dtype)  # (n, K)
+                if self.use_weighted_sum:
+                    vq_indices_one_hot = distance_prob
+                else:
+                    vq_indices_one_hot = F.one_hot(vq_indices, self.num_codebook).to(z.dtype)  # (n, K)
+
                 vq_current_count = torch.sum(vq_indices_one_hot, dim=0)  # (K,)
                 vq_current_sum = torch.matmul(vq_indices_one_hot.t(), z_flat)  # (K, n) x (n, d) = (K, d)
 

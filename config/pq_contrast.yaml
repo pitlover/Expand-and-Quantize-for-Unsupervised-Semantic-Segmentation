@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ema_top1_1:10"
+  name: "CONTRAST_ema_top1_1:100"
   notes: "PQ_1024_1024_contrastX_pq(4, 16)_hidden_384"
 
 # ---------------------------------------------------------------- #
@@ -47,7 +47,7 @@ model:
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  vq_weight: 10.0
+  vq_weight: 100.0
   contra_weight:
     pos: 0.0
     neg: 0.0

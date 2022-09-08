@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ema_top1_1:10_pq1:1"
+  name: "CONTRAST_ema_top1_1:10_pq4:16_rand"
   notes: "PQ_1024_1024_contrastX_pq(4, 16)_hidden_384,random_restart"
 
 # ---------------------------------------------------------------- #
@@ -40,8 +40,9 @@ model:
     update_norm: true # check default true
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 1, 1 ]
+    num_pq: [ 4, 16 ]
     agg_type: "concat"  # add, concat
+    need_initialized : "rand" # rand, kmeans, none
 
 
 # ---------------------------------------------------------------- #

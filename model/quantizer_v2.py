@@ -259,39 +259,34 @@ class EMAVectorQuantizer(nn.Module):
 
         flat_inputs = z.view(-1, d)  # (bhw, d) = (n, d)
 
-        flat_inputs = F.normalize(flat_inputs, dim=1)
-        codebook = F.normalize(self.embeddings, dim=1)
-
         if self._need_init and self.training:
             self._init_embeddings(flat_inputs)
 
-        distances = (torch.sum(flat_inputs ** 2, dim=1, keepdim=True)
-                     + torch.sum(codebook ** 2, dim=1)
-                     - 2 * torch.matmul(flat_inputs, codebook.t()))
+        # normalize
+        z_norm = F.normalize(flat_inputs, dim=1)
+        codebook_norm = F.normalize(self.embeddings, dim=1)
+        flat_inputs = z_norm
+        distances = (torch.sum(z_norm ** 2, dim=1, keepdim=True)
+                     + torch.sum(codebook_norm ** 2, dim=1)
+                     - 2 * torch.matmul(z_norm, codebook_norm.t()))
 
         distance_prob = F.softmax(-distances * 1.0, dim=1)  # (n, K) # TODO scaling
 
         encoding_indices = torch.argmin(distances, dim=1)
-        embeddings = F.embedding(encoding_indices, codebook)
-        encode_onehot = F.one_hot(encoding_indices, self.n_codes).type_as(flat_inputs)
+        embeddings = F.embedding(encoding_indices, z_norm)
         output = dict()
-
-        commitment_loss = F.mse_loss(flat_inputs, embeddings.detach())
-
-        output["commitment-loss"] = commitment_loss
-        output["loss"] = self.beta * commitment_loss
-
-        output["codebook-sum"] = torch.sum(torch.abs(codebook))
 
         # EMA codebook update
         if self.training:
+            encode_onehot = F.one_hot(encoding_indices, self.n_codes).to(z.dtype)
             n_total = encode_onehot.sum(dim=0)
-            encode_sum = flat_inputs.t() @ encode_onehot
+            encode_sum = torch.matmul(encode_onehot.t(), flat_inputs)
+            # encode_sum = flat_inputs.t() @ encode_onehot # (n, d) -> (d, n) * (n, k) -> (d, k)
             all_reduce_tensor(n_total)
             all_reduce_tensor(encode_sum)
 
             self.N.data.mul_(self.decay).add_(n_total, alpha=1 - self.decay)
-            self.z_avg.data.mul_(self.decay).add_(encode_sum.t(), alpha=1 - self.decay)
+            self.z_avg.data.mul_(self.decay).add_(encode_sum, alpha=1 - self.decay)
 
             n = self.N.sum()
             weights = (self.N + self.eps) / (n + self.n_codes * self.eps) * n
@@ -302,6 +297,13 @@ class EMAVectorQuantizer(nn.Module):
             # broadcast_tensors(_k_rand, 0)
             # usage = (self.N.reshape(self.n_codes, 1) >= 1).float()
             # self.embeddings.data.mul_(usage).add_(_k_rand * (1 - usage))
+
+        commitment_loss = F.mse_loss(flat_inputs, embeddings.detach())
+
+        output["commitment-loss"] = commitment_loss
+        output["loss"] = self.beta * commitment_loss
+
+        output["codebook-sum"] = torch.sum(torch.abs(self.embeddings))
 
         q = embeddings.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()  # (b, d, h, w)
 

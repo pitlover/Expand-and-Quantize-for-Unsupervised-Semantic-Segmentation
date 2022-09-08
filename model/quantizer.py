@@ -7,6 +7,7 @@ import torch.nn.functional as F  # noqa
 
 from model.loss import JSDLoss
 from utils.dist_utils import all_reduce_tensor
+from kmeans_pytorch import kmeans
 
 __all__ = ["VectorQuantizer", "EMAVectorQuantizer", "EmbeddingEMA", "ProductQuantizerWrapper"]
 
@@ -40,7 +41,8 @@ class VectorQuantizer(nn.Module):
                  use_gumbel: bool = False,
                  use_split: bool = False,
                  use_weighted_sum: bool = False,
-                 update_norm: bool = True
+                 update_norm: bool = True,
+                 need_initialized: str = "none"
                  ) -> None:
         super().__init__()
         self.num_codebook = num_codebook
@@ -61,6 +63,7 @@ class VectorQuantizer(nn.Module):
         self.use_split = use_split
         self.use_weighted_sum = use_weighted_sum
         self.update_norm = update_norm
+        self.need_initialized = need_initialized
         if use_split:
             raise NotImplementedError("NOT YET implemented. Currently only for EMA.")
 
@@ -193,7 +196,8 @@ class VectorQuantizer(nn.Module):
                f"use_split={self.use_split}, " \
                f"use_weighted_sum={self.use_weighted_sum}, " \
                f"update_norm={self.update_norm}, " \
-               f"use_restart={self.use_restart}"
+               f"use_restart={self.use_restart}" \
+               f"need_initialized={self.need_initialized}"
 
 
 class EmbeddingEMA(nn.Module):
@@ -262,7 +266,8 @@ class EMAVectorQuantizer(nn.Module):
                  use_gumbel: bool = False,
                  use_split: bool = False,
                  use_weighted_sum: bool = False,
-                 update_norm: bool = True
+                 update_norm: bool = True,
+                 need_initialized: str = "none"
                  ) -> None:
         super().__init__()
         self.num_codebook = num_codebook
@@ -285,7 +290,7 @@ class EMAVectorQuantizer(nn.Module):
 
         self.update_indices = None  # placeholder
         self.update_candidates = None  # placeholder
-        # self._initialized = False
+        self.need_initialized = need_initialized  # TODO initialize or not
         self.jsd = JSDLoss(reduction="batchmean")
         self.use_weighted_sum = use_weighted_sum
         self.update_norm = update_norm
@@ -317,7 +322,6 @@ class EMAVectorQuantizer(nn.Module):
     def restart(self) -> None:
         if (self.update_indices is not None) and (self.update_candidates is not None):
             self.codebook.weight.data[self.update_indices] = self.update_candidates
-            self.vq_count.fill_(0)
             self.codebook.reset()
 
             self.update_indices = None
@@ -389,11 +393,20 @@ class EMAVectorQuantizer(nn.Module):
         z_flat = z.view(-1, d)  # (bhw, d) = (n, d)
         n = b * h * w
 
-        # if not self._initialized:
-        #     self.prepare_restart(torch.zeros(self.num_codebook, dtype=torch.long, device=z.device),
-        #                          z_flat)
-        #     self.restart()
-        #     self._initialized = True
+        if self.need_initialized != "none" and self.training:
+            if self.need_initialized == "rand":
+                self.prepare_restart(torch.zeros(self.num_codebook, dtype=torch.long, device=z.device),
+                                     z_flat)
+                self.restart()
+
+            elif self.need_initialized == "kmeans":
+                cluster_ids_x, cluster_centers = kmeans(
+                    X=z_flat, num_clusters=self.num_codebook, distance='euclidean', device=z.device
+                )
+                self.codebook.weight.data.copy_(cluster_centers)
+                self.codebook.weight_avg.data.copy_(cluster_centers)
+
+            self.need_initialized = False
 
         # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
         codebook = self.codebook.weight  # (K, d)
@@ -548,6 +561,7 @@ class ProductQuantizerWrapper(nn.Module):
                  use_split: bool = False,
                  use_weighted_sum: bool = False,
                  update_norm: bool = True,
+                 need_initialized: str = "none",
                  quantizer_cls=EMAVectorQuantizer,
                  ) -> None:
         super().__init__()
@@ -561,7 +575,7 @@ class ProductQuantizerWrapper(nn.Module):
             quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize,
                           decay=decay, eps=eps,
                           use_restart=use_restart, use_gumbel=use_gumbel, use_split=use_split,
-                          use_weighted_sum=use_weighted_sum, update_norm=update_norm)
+                          use_weighted_sum=use_weighted_sum, update_norm=update_norm, need_initialized=need_initialized)
             for _ in range(self.num_pq)
         ])
 

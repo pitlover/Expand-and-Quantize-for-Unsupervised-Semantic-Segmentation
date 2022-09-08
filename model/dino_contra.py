@@ -40,6 +40,7 @@ class DINOContra(nn.Module):
         self.use_split = cfg["vq"].get("use_split", False)
         self.use_gumbel = cfg["vq"].get("use_gumbel", False)
         self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
+        self.need_initialized = cfg["vq"].get("need_initialized", False)
         self.jsd = JSDLoss()
 
         self.num_pq = cfg["vq"].get("num_pq", 1)
@@ -48,7 +49,7 @@ class DINOContra(nn.Module):
 
         vq_kwargs = dict(beta=self.beta, normalize=self.normalize,
                          use_restart=self.use_restart, use_gumbel=self.use_gumbel, use_split=self.use_split,
-                         use_weighted_sum=self.use_weighted_sum)
+                         use_weighted_sum=self.use_weighted_sum, need_initialized=self.need_initialized)
 
         if self.vq_type == "ema":
             vq_kwargs["decay"] = cfg["vq"]["decay"]

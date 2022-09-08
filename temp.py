@@ -58,6 +58,8 @@ class DINOUnSegWrapper(nn.Module):
 
         model_loss = output["recon-loss"] * self.recon_weight
 
+        # if self.contra_weight > 0:
+        #     model_loss += (output["contra-loss"] * self.contra_weight)
         model_loss += (output["contra-loss-pos"] * self.contra_pos_weight + output[
             "contra-loss-neg"] * self.contra_neg_weight)
 

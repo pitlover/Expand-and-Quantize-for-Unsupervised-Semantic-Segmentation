@@ -16,10 +16,8 @@ class JSDLoss(nn.Module):
         :param q:    (bhw, K)
         :return:
         """
-        # m = (0.5 * (p + q).add(1e-6)).log()
-        # return 0.5 * (self.kl(p.add(1e-6).log(), m) + self.kl(q.add(1e-6).log(), m))
-
         m = (0.5 * (p + q).add(1e-6)).log()
+        # TODO check position
         return 0.5 * (self.kl(m, p.add(1e-6).log()) + self.kl(m, q.add(1e-6).log()))
 
 

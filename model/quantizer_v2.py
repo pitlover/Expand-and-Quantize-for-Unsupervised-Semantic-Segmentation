@@ -212,13 +212,20 @@ class EMAVectorQuantizer(nn.Module):
                  update_norm: bool = True
                  ) -> None:
         super().__init__()
-        self.register_buffer('embeddings', torch.randn(n_codes, embedding_dim))
+        weight = torch.randn(n_codes, embedding_dim)
+        nn.init.uniform_(weight, -1.0 / n_codes, 1.0 / n_codes)
+
+        self.register_buffer('embeddings', weight)
         self.register_buffer('N', torch.zeros(n_codes))
         self.register_buffer('z_avg', self.embeddings.data.clone())
 
         self.n_codes = n_codes
         self.embedding_dim = embedding_dim
-        self._need_init = True
+        self._need_init = False
+
+        self.decay = decay
+        self.eps = eps
+        self.beta = beta
 
     def _tile(self, x):
         n_data = x.shape[0]
@@ -231,6 +238,7 @@ class EMAVectorQuantizer(nn.Module):
             z_indices = z_indices[:n_update]
         else:
             raise ValueError("n_update > n_data")
+
         update_candidates = x[z_indices]
 
         return update_candidates
@@ -268,9 +276,9 @@ class EMAVectorQuantizer(nn.Module):
         commitment_loss = F.mse_loss(flat_inputs, embeddings.detach())
 
         output["commitment-loss"] = commitment_loss
-        output["loss"] = 0.25 * commitment_loss
+        output["loss"] = self.beta * commitment_loss
 
-        output["codebook-sum"] = torch.sum(torch.abs(self.embeddings.data))
+        output["codebook-sum"] = torch.sum(torch.abs(self.embeddings))
 
         # EMA codebook update
         if self.training:
@@ -279,18 +287,18 @@ class EMAVectorQuantizer(nn.Module):
             all_reduce_tensor(n_total)
             all_reduce_tensor(encode_sum)
 
-            self.N.data.mul_(0.99).add_(n_total, alpha=0.01)
-            self.z_avg.data.mul_(0.99).add_(encode_sum.t(), alpha=0.01)
+            self.N.data.mul_(self.decay).add_(n_total, alpha=1 - self.decay)
+            self.z_avg.data.mul_(self.decay).add_(encode_sum.t(), alpha=1 - self.decay)
 
             n = self.N.sum()
-            weights = (self.N + 1e-7) / (n + self.n_codes * 1e-7) * n
+            weights = (self.N + self.eps) / (n + self.n_codes * self.eps) * n
             encode_normalized = self.z_avg / weights.unsqueeze(1)
             self.embeddings.data.copy_(encode_normalized)
 
-            _k_rand = self._tile(flat_inputs)
-            broadcast_tensors(_k_rand, 0)
-            usage = (self.N.reshape(self.n_codes, 1) >= 1).float()
-            self.embeddings.data.mul_(usage).add_(_k_rand * (1 - usage))
+            # _k_rand = self._tile(flat_inputs)
+            # broadcast_tensors(_k_rand, 0)
+            # usage = (self.N.reshape(self.n_codes, 1) >= 1).float()
+            # self.embeddings.data.mul_(usage).add_(_k_rand * (1 - usage))
 
         q = embeddings.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()  # (b, d, h, w)
 

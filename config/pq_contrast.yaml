@@ -47,7 +47,7 @@ model:
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  vq_weight: 1.0
+  vq_weight: 10.0
   contra_weight:
     pos: 0.0
     neg: 0.0

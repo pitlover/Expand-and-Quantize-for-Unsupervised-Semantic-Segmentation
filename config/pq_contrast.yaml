@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ema_top1_1:100"
-  notes: "PQ_1024_1024_contrastX_pq(4, 16)_hidden_384"
+  name: "CONTRAST_ema(video)_top1_1:1"
+  notes: "PQ_1024_1024_contrastX_pq(4, 16)_hidden_384,random_restart"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -32,22 +32,22 @@ model:
     num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
     embed_dims: [ 512,  512 ]
     beta: 0.25
-    normalize: "l2"  # l2, z_norm, z_trainable, none
+    normalize: "none"  # l2, z_norm, z_trainable, none
     use_restart: false
-    use_split: true
+    use_split: false
     use_gumbel: false
-    use_weighted_sum: true
+    use_weighted_sum: false
     update_norm: true # check default true
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 4, 16 ]
+    num_pq: [ 1, 1 ]
     agg_type: "concat"  # add, concat
 
 
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  vq_weight: 100.0
+  vq_weight: 1.0
   contra_weight:
     pos: 0.0
     neg: 0.0

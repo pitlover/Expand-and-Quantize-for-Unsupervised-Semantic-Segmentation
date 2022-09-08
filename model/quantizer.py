@@ -388,7 +388,6 @@ class EMAVectorQuantizer(nn.Module):
 
         z_flat = z.view(-1, d)  # (bhw, d) = (n, d)
         n = b * h * w
-        k = self.num_codebook
 
         # if not self._initialized:
         #     self.prepare_restart(torch.zeros(self.num_codebook, dtype=torch.long, device=z.device),

@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import scipy as sp
+import numpy as np
 
 
 class JSDLoss(nn.Module):
@@ -14,9 +16,25 @@ class JSDLoss(nn.Module):
         :param q:    (bhw, K)
         :return:
         """
+        # m = (0.5 * (p + q).add(1e-6)).log()
+        # return 0.5 * (self.kl(p.add(1e-6).log(), m) + self.kl(q.add(1e-6).log(), m))
+
         m = (0.5 * (p + q).add(1e-6)).log()
-        # TODO check position
         return 0.5 * (self.kl(m, p.add(1e-6).log()) + self.kl(m, q.add(1e-6).log()))
+
+
+# class JSDLoss(nn.Module):
+#     '''
+#             Implementation of pairwise `jsd` based on
+#             https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence
+#         '''
+#
+#     def __init__(self):
+#         self.kl = sp.stats.entropy(base=np.e)
+#
+#     def forward(self, p: torch.Tensor, q: torch.Tensor):
+#         m = 1. / 2 * (p + q)
+#         return 0.5 * (self.kl(p, m) + self.kl(q, m))
 
 
 def tensor_correlation(a, b):

@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ema_top1_1:10:10_pq4:16_512:2048"
+  name: "CONTRAST_ema_top1_1:10_pq4:16_k512:1024_dim256:1024"
   notes: "PQ_1024_1024_contrastX_pq(8, 16)_hidden_384"
 
 # ---------------------------------------------------------------- #
@@ -29,8 +29,8 @@ model:
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 512,  2048 ] # 2048 -> 1024
-    embed_dims: [ 512,  512 ]
+    num_codebooks: [ 512,  1024 ] # 2048 -> 1024
+    embed_dims: [ 256,  1024 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
@@ -50,7 +50,7 @@ loss:
   recon_weight: 1.0
   vq_weight: 10.0
   contra_weight:
-    pos: 10.0
+    pos: 0.0
     neg: 0.0
 
 # ---------------------------------------------------------------- #

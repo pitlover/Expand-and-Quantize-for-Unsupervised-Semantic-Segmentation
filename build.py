@@ -12,9 +12,11 @@ from model.dino_unseg import DINOUnSeg
 from model.dino_contra import DINOContra
 from model.dino_stego import DINOStego
 from model.dino_vae import DINOVae
+from model.dino_res import DINORes
 
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
+from wrapper.ResWrapper import ResWrapper
 
 
 def build_model(cfg: dict,
@@ -22,6 +24,8 @@ def build_model(cfg: dict,
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
+    elif "res" in name:
+        model = ResWrapper(cfg, DINORes(cfg["model"]))
     elif "contra" in name:
         model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
     elif "vae" in name:
@@ -45,7 +49,6 @@ def split_params_for_optimizer(model):
             for param in module.parameters(recurse=False):
                 if not param.requires_grad:
                     continue
-
                 if param.ndim > 1:
                     params.append(param)
                 else:

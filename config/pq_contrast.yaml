@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_kmeans_1:10_pq4:16_k512:1024_dim256:1024"
+  name: "CONTRAST_1:10_kmeans_pq4:16_k512:1024_dim256:1024"
   notes: "PQ_1024_1024_contrastX_pq(8, 16)_hidden_384"
 
 # ---------------------------------------------------------------- #

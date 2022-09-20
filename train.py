@@ -24,7 +24,7 @@ from wrapper.UnsegWrapper import DINOUnSegWrapper
 
 
 def train_epoch(
-        model: DINOUnSegWrapper,
+        model,
         optimizers,
         schedulers,
         train_dataloader,
@@ -40,7 +40,6 @@ def train_epoch(
 ) -> Tuple[int, Dict[str, float], int, int]:
     # cfg = cfg
     model_m = model.module if isinstance(model, DistributedDataParallel) else model
-    model_m: DINOUnSegWrapper
 
     print_interval = cfg["train"]["print_interval_iters"]
     valid_interval = cfg["train"]["valid_interval_iters"]
@@ -80,11 +79,11 @@ def train_epoch(
             forward_start_time = time.time()
             total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
-
-            backward_start_time = time.time()
-            loss = total_loss / num_accum
-            loss.backward()
-            backward_time = time.time() - backward_start_time
+            with torch.autograd.set_detect_anomaly(True):
+                backward_start_time = time.time()
+                loss = total_loss / num_accum
+                loss.backward()
+                backward_time = time.time() - backward_start_time
 
             step_start_time = time.time()
             grad_norm = clip_grad_norm_(model_m.model.parameters(), max_norm=clip_grad)
@@ -109,8 +108,7 @@ def train_epoch(
 
         # -------------------------------- print -------------------------------- #
 
-        if (it > 0) and (it % print_interval == 0):
-
+        if it % print_interval == 0:
             output = all_reduce_dict(output, op="mean")
             param_norm = compute_param_norm(model_m.model.parameters())
             lr = schedulers[0].get_last_lr()[0]
@@ -211,6 +209,7 @@ def valid_epoch(
     valid_start_time = time.time()
     result = dict()
     count = 0
+
     for it, data in enumerate(dataloader):
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
@@ -383,8 +382,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
     s = time_log()
     best_checkpoint = torch.load(f"{save_dir}/best.pth", map_location=device)
     model_m = model.module if isinstance(model, DistributedDataParallel) else model
-    # model_m.load_state_dict(best_checkpoint['model'], strict=True)
-    model_m.load_state_dict(best_checkpoint['net_model_state_dict'], strict=True)
+    model_m.load_state_dict(best_checkpoint['model'], strict=True)
     final_start_time = time.time()
     s += "Final evaluation (before CRF)\n"
 

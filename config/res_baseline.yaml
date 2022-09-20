@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_ema_top1_1:10"
-  notes: "PQ_1024_1024_contrastX_pq(4, 16)_hidden_384"
+  name: "RES_baseline_lr"
+  notes: "only_enc_dec, no_contrast, no_mi"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -25,29 +25,14 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 384
+  hidden_dim: 512
   last_norm: false
-  vq:
-    vq_type: "ema"  # ema, param
-    num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
-    embed_dims: [ 512,  512 ]
-    beta: 0.25
-    normalize: "l2"  # l2, z_norm, z_trainable, none
-    use_restart: false
-    use_split: true
-    use_gumbel: false
-    use_weighted_sum: true
-    update_norm: true # check default true
-    decay: 0.99
-    eps: 1.0e-5
-    num_pq: [ 4, 16 ]
-    agg_type: "concat"  # add, concat
+  agg_type: "concat"
 
 
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  vq_weight: 10.0
   contra_weight:
     pos: 0.0
     neg: 0.0
@@ -70,10 +55,10 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
+    batch_size: 128  # total
     num_workers: 8  # total
   val:
-    batch_size: 32  # total
+    batch_size: 64  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
@@ -81,10 +66,10 @@ optimizer:
   model:
     name: "adamw"
     lr: 3.0e-4
-    weight_decay: 2.0
+    weight_decay: 1.0e-4
   cluster:
-    name: "adam"
-    lr: 3.0e-3
+    name: "sgd"
+    lr: 6.0e-4
   linear:
     name: "adam"
     lr: 3.0e-3
@@ -92,7 +77,7 @@ optimizer:
 # ---------------------------------------------------------------- #
 scheduler:
   model:
-    name: "cos"
+    name: "cos" # cos, constant
   cluster:
     name: "cos"
   linear:
@@ -100,13 +85,12 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "vq0" # feat, vq0
   extra_classes: 0
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 1
   print_interval_iters: 25
-  valid_interval_iters: 100
+  valid_interval_iters: 25
   clip_grad: 1.0
-  num_accum: 2
+  num_accum: 1

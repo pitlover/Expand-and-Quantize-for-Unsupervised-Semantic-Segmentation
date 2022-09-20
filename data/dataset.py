@@ -350,7 +350,6 @@ class UnSegDataset(Dataset):
             # "img_path_pos": image_path_pos
         }
 
-        '''
         if self.aug_photometric_transform is not None:
             seed = random.randint(0, 2147483647)  # make a seed with numpy generator
 
@@ -417,5 +416,5 @@ class UnSegDataset(Dataset):
             self._set_seed(seed)
             coord_aug = self.aug_geometric_transform(coord)
             ret["coord_aug"] = coord_aug.permute(1, 2, 0)
-        '''
+
         return ret

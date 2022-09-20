@@ -55,7 +55,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 1  # total
     num_workers: 8  # total
   val:
     batch_size: 64  # total
@@ -69,7 +69,7 @@ optimizer:
     weight_decay: 1.0e-4
   cluster:
     name: "sgd"
-    lr: 6.0e-4
+    lr: 1.0e-2
   linear:
     name: "adam"
     lr: 3.0e-3

@@ -164,9 +164,9 @@ class DINOContra(nn.Module):
             feat = sum(feat_vqs)
         else:
             raise ValueError
-        feat = self.vq_aggregate_proj(feat)  # (b, 384, 28, 28)
+        feat = self.vq_aggregate_proj(feat)  # (2b, 384, 28, 28)
 
-        recon = self.dec_proj(feat)  # (b, 384, 28, 28)
+        recon = self.dec_proj(feat)  # (2b, 384, 28, 28)
         recon_loss = F.mse_loss(recon, dino_feat)
 
         output["recon-loss"] = recon_loss

@@ -79,11 +79,10 @@ def train_epoch(
             forward_start_time = time.time()
             total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
-            with torch.autograd.set_detect_anomaly(True):
-                backward_start_time = time.time()
-                loss = total_loss / num_accum
-                loss.backward()
-                backward_time = time.time() - backward_start_time
+            backward_start_time = time.time()
+            loss = total_loss / num_accum
+            loss.backward()
+            backward_time = time.time() - backward_start_time
 
             step_start_time = time.time()
             grad_norm = clip_grad_norm_(model_m.model.parameters(), max_norm=clip_grad)

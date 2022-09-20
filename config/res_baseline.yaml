@@ -55,7 +55,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 1  # total
+    batch_size: 128  # total
     num_workers: 8  # total
   val:
     batch_size: 64  # total
@@ -64,15 +64,15 @@ dataloader:
 # ---------------------------------------------------------------- #
 optimizer:
   model:
-    name: "adamw"
-    lr: 3.0e-4
+    name: "sgd"
+    lr: 3.0e-2
     weight_decay: 1.0e-4
   cluster:
     name: "sgd"
-    lr: 1.0e-2
+    lr: 3.0e-1
   linear:
-    name: "adam"
-    lr: 3.0e-3
+    name: "sgd"
+    lr: 3.0e-1
 
 # ---------------------------------------------------------------- #
 scheduler:
@@ -89,7 +89,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 1
+  max_epochs: 2
   print_interval_iters: 25
   valid_interval_iters: 25
   clip_grad: 1.0

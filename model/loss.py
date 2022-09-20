@@ -3,6 +3,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class MutualInformation(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor):
+        """
+        :param x1: (b, d, h, w)
+        :param x2: (b, d, h, w
+        :return:
+        """
+
+
+
 class JSDLoss(nn.Module):
     def __init__(self, reduction="batchmean"):
         super().__init__()

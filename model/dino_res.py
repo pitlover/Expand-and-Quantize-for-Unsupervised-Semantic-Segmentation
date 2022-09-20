@@ -6,7 +6,7 @@ import torch.nn.functional as F  # noqa
 import torchvision.transforms as transforms
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
-
+from model.loss import MutualInformation
 
 class DINORes(nn.Module):
     def __init__(self, cfg: dict):  # cfg["model"]
@@ -51,6 +51,7 @@ class DINORes(nn.Module):
         else:
             raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
 
+        self.mi_loss = MutualInformation()
     def _photometric_aug(self, x: torch.Tensor):
         # b, 3, h, w = x.shape
         batch_size = x.shape[0]
@@ -90,15 +91,15 @@ class DINORes(nn.Module):
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
 
-        img_aug_1 = img  # (b, 3, h, w)
-        img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
+        # img_aug_1 = img  # (b, 3, h, w)
+        # img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
 
         # TODO contrast geometric
         # seed = random.randint(0, 2147483647)
         # self._set_seed(seed)
         # img_aug_2 = self._geometric_aug(img_aug_2)  # (b, 3, h, w)
 
-        img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
+        # img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
 
         dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
@@ -124,15 +125,11 @@ class DINORes(nn.Module):
         output["recon-loss"] = recon_loss
 
         # split half
-        dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]  # (b, d, h, w)
-        semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, d, h, w)
+        # dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]  # (b, d, h, w)
+        # semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, d, h, w)
 
         # contrastive loss -> re-transform geometric transforms
+        # output["contra-loss-pos"] = self.mi_loss(semantic_feat_img1, semantic_feat_img2)
+        # output["contra-loss-neg"] = self.mi_loss(semantic_feat_img1, semantic_feat_img2)
 
-        # top_dis_prob_1, top_dis_prob_2 = torch.chunk(vq_top_dis_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
-        # output["contra-loss-pos"] = self.jsd(top_dis_prob_1, top_dis_prob_2)
-        #
-        # bottom_dis_prob_1, bottom_dis_prob_2 = torch.chunk(vq_bottom_dis_prob, chunks=2, dim=0)
-        # output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
-
-        return dino_feat, semantic_feat_img1, output
+        return dino_feat, semantic_feat, output

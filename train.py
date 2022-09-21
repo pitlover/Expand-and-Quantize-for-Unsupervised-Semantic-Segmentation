@@ -254,7 +254,8 @@ def valid_epoch(
         }
         for k, v in result.items():
             log_dict[k] = v.item() if isinstance(v, torch.Tensor) else v
-        wandb.log(log_dict)
+        if not is_crf:
+            wandb.log(log_dict)
 
     return result, cluster_result, linear_result
 

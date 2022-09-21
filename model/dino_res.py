@@ -6,7 +6,9 @@ import torch.nn.functional as F  # noqa
 import torchvision.transforms as transforms
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
-from model.loss import MutualInformation
+from model.loss import InfoNCELoss, CLUBLoss
+from model.blocks.club_encoder import CLUBEncoder
+
 
 class DINORes(nn.Module):
     def __init__(self, cfg: dict):  # cfg["model"]
@@ -51,7 +53,11 @@ class DINORes(nn.Module):
         else:
             raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
 
-        self.mi_loss = MutualInformation()
+        # -------- loss -------- #
+       # self.infonce_loss = InfoNCELoss()
+        # self.enc_club = CLUBEncoder(input_dim=self.hidden_dim, output_dim=self.hidden_dim, hidden_dim=self.hidden_dim)
+        # self.club_loss = CLUBLoss()
+
     def _photometric_aug(self, x: torch.Tensor):
         # b, 3, h, w = x.shape
         batch_size = x.shape[0]
@@ -92,7 +98,7 @@ class DINORes(nn.Module):
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
 
         # img_aug_1 = img  # (b, 3, h, w)
-        # img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
+       # img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
 
         # TODO contrast geometric
         # seed = random.randint(0, 2147483647)
@@ -114,8 +120,8 @@ class DINORes(nn.Module):
         else:
             raise ValueError
 
-        feat = self.aggregate_proj(feat)  # (2b, 384, 28, 28)
-        recon = self.dec_proj(feat)  # (2b, 384, 28, 28)
+        feat = self.aggregate_proj(feat)  # (2b, hidden_d + hidden_d, h, w) -> (2b, hidden_d, h, w)
+        recon = self.dec_proj(feat)  # (2b, hidden_d, h, w) -> (2b, d, h, w)
 
         if self.dec_norm is not None:
             recon = self.dec_norm(recon)
@@ -125,11 +131,16 @@ class DINORes(nn.Module):
         output["recon-loss"] = recon_loss
 
         # split half
-        # dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]  # (b, d, h, w)
-        # semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, d, h, w)
+       # dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]  # (b, d, h, w)
+        # semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
+        # local_feat_img1, local_feat_img2 = torch.chunk(local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
 
         # contrastive loss -> re-transform geometric transforms
-        # output["contra-loss-pos"] = self.mi_loss(semantic_feat_img1, semantic_feat_img2)
-        # output["contra-loss-neg"] = self.mi_loss(semantic_feat_img1, semantic_feat_img2)
+        # output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
 
+        # TODO target -> local_feat1 or local_feat2 ?
+        # p_mu, p_logvar = self.enc_club(local_feat_img2)
+        # output["contra-loss-neg"] = self.club_loss(local_feat_img1, p_mu, p_logvar)
+
+        # return dino_feat, semantic_feat_img1, output
         return dino_feat, semantic_feat, output

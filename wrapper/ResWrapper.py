@@ -24,8 +24,8 @@ class ResWrapper(nn.Module):
         self.extra_classes = cfg["eval"]["extra_classes"]
 
         self.recon_weight = cfg["loss"]["recon_weight"]
-        self.contra_pos_weight = cfg["loss"]["contra_weight"].get("info_nce", 0.0)
-        self.contra_neg_weight = cfg["loss"]["contra_weight"].get("club", 0.0)
+        self.contra_pos_weight = cfg["loss"].get("info_nce_weight", 0.0)
+        self.contra_neg_weight = cfg["loss"].get("club_weight", 0.0)
 
         self.output_dim = cfg["model"]["hidden_dim"]
         self.evaluator = UnSegEvaluator(
@@ -57,6 +57,5 @@ class ResWrapper(nn.Module):
         output["cluster-loss"] = cluster_loss
 
         total_loss = model_loss + linear_loss + cluster_loss
-
 
         return total_loss, output, (linear_preds, cluster_preds)

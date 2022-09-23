@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_5-cropX"
+  name: "RES_baseline_bs64_5-cropX"
   notes: "only_enc_dec, no_contrast, no_mi"
 
 # ---------------------------------------------------------------- #
@@ -25,18 +25,23 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
+  semantic_dim: 512
+  local_dim: 512
   hidden_dim: 512
   last_norm: false
   agg_type: "concat"
-
+  neg_sample: 100
 
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  contra_weight:
-    info_nce: 0.0
-    club: 0.0
+  info_nce_weight: 1.0
+  club_weight: 1.0
 
+  info_nce:
+    neg_sample: 100
+    temperature: 1.0
+    normalize: "l2"
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -55,10 +60,10 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 64  # total
     num_workers: 8  # total
   val:
-    batch_size: 64  # total
+    batch_size: 32  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #

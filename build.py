@@ -25,7 +25,7 @@ def build_model(cfg: dict,
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
     elif "res" in name:
-        model = ResWrapper(cfg, DINORes(cfg["model"]))
+        model = ResWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
     elif "contra" in name:
         model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
     elif "vae" in name:
@@ -34,6 +34,10 @@ def build_model(cfg: dict,
         model = StegoWrapper(cfg, DINOStego(cfg["model"]))
     else:
         raise ValueError(f"Unsupported type {name}.")
+
+    # for n, p in model.named_parameters():
+    #     if p.grad is None:
+    #         print(f'{n} has no grad')
 
     return model
 

@@ -7,32 +7,41 @@ import torchvision.transforms as transforms
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import InfoNCELoss, CLUBLoss
-from model.blocks.club_encoder import CLUBEncoder
 
 
 class DINORes(nn.Module):
-    def __init__(self, cfg: dict):  # cfg["model"]
+    def __init__(self, cfg: dict, cfg_loss: dict):  # cfg["model"], cfg["loss"]
         super().__init__()
         self.cfg = cfg
+        self.cfg_loss = cfg_loss
 
         self.extractor = DinoFeaturizer(cfg["pretrained"])
         self.feat_dim = self.extractor.n_feats  # 384
+        self.semantic_dim = cfg.get("semantic_dim", self.feat_dim)
+        self.local_dim = cfg.get("local_dim", self.feat_dim)
         self.hidden_dim = cfg.get("hidden_dim", self.feat_dim)
 
         # -------- semantic-encoder -------- #
         num_enc_blocks = cfg["enc_num_blocks"]
         semantic_enc_proj = []
         for i in range(num_enc_blocks):
-            semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
+            semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.semantic_dim, self.semantic_dim))
         self.semantic_enc_proj = nn.Sequential(*semantic_enc_proj)
 
         # -------- local-encoder -------- #
         local_enc_proj = []
         for i in range(num_enc_blocks):
-            local_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
+            local_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.local_dim, self.local_dim))
         self.local_enc_proj = nn.Sequential(*local_enc_proj)
 
         # -------- decoder -------- #
+        self.agg_type = cfg["agg_type"]
+        if (self.agg_type == "cat") or (self.agg_type == "concat"):
+            self.agg_type = "concat"
+            self.aggregate_proj = nn.Conv2d(self.semantic_dim + self.local_dim, self.hidden_dim, 1, 1, 0)
+        else:
+            raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
+
         num_dec_blocks = cfg["dec_num_blocks"]
         dec_proj = []
         for i in range(num_dec_blocks):
@@ -43,20 +52,12 @@ class DINORes(nn.Module):
         last_norm = cfg.get("last_norm", False)
         self.dec_norm = LayerNorm2d(self.feat_dim) if last_norm else None
 
-        self.agg_type = cfg["agg_type"]
-        if (self.agg_type == "cat") or (self.agg_type == "concat"):
-            self.agg_type = "concat"
-            self.aggregate_proj = nn.Conv2d(self.hidden_dim + self.hidden_dim, self.hidden_dim, 1, 1, 0)
-        elif (self.agg_type == "add") or (self.agg_type == "sum"):
-            self.agg_type = "add"
-            self.aggregate_proj = nn.Conv2d(self.hidden_dim, self.hidden_dim, 1, 1, 0)
-        else:
-            raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
-
         # -------- loss -------- #
-       # self.infonce_loss = InfoNCELoss()
-        # self.enc_club = CLUBEncoder(input_dim=self.hidden_dim, output_dim=self.hidden_dim, hidden_dim=self.hidden_dim)
-        # self.club_loss = CLUBLoss()
+        self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
+                                        neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
+                                        temperature=self.cfg_loss["info_nce"].get("temperature", 1.0))
+
+        self.club_loss = CLUBLoss(input_dim=self.local_dim, output_dim=self.semantic_dim, hidden_dim=self.hidden_dim)
 
     def _photometric_aug(self, x: torch.Tensor):
         # b, 3, h, w = x.shape
@@ -97,15 +98,15 @@ class DINORes(nn.Module):
     def forward(self, img: torch.Tensor
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
 
-        # img_aug_1 = img  # (b, 3, h, w)
-       # img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
+        img_aug_1 = img  # (b, 3, h, w)
+        img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
 
         # TODO contrast geometric
         # seed = random.randint(0, 2147483647)
         # self._set_seed(seed)
         # img_aug_2 = self._geometric_aug(img_aug_2)  # (b, 3, h, w)
 
-        # img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
+        img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
 
         dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
@@ -131,16 +132,13 @@ class DINORes(nn.Module):
         output["recon-loss"] = recon_loss
 
         # split half
-       # dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]  # (b, d, h, w)
-        # semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
-        # local_feat_img1, local_feat_img2 = torch.chunk(local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
+        dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]  # (b, d, h, w)
+        semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
+        local_feat_img1, local_feat_img2 = torch.chunk(local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
 
-        # contrastive loss -> re-transform geometric transforms
-        # output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+        # contrastive loss -> re - transform geometric transforms
+        output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+        output["contra-loss-neg"] = self.club_loss(local_feat_img1, local_feat_img2)
 
-        # TODO target -> local_feat1 or local_feat2 ?
-        # p_mu, p_logvar = self.enc_club(local_feat_img2)
-        # output["contra-loss-neg"] = self.club_loss(local_feat_img1, p_mu, p_logvar)
-
-        # return dino_feat, semantic_feat_img1, output
-        return dino_feat, semantic_feat, output
+        return dino_feat, semantic_feat_img1, output
+        # return dino_feat, semantic_feat, output

@@ -38,11 +38,11 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
         :return:     mu : (bhw, d)
                  logvar : (bhw, d)
         '''
-        x_samples = x_samples.permute(0, 2, 3, 1).contiguous()
-        b, h, w, d = x_samples.shape
-        flat_x = x_samples.view(-1, d)
-
-        mu = self.p_mu(flat_x)
-        logvar = self.p_logvar(flat_x)
+        mu = self.p_mu(x_samples)
+        logvar = self.p_logvar(x_samples)
 
         return mu, logvar
+
+    def loglikeli(self, x_samples, y_samples):  # unnormalized loglikelihood
+        mu, logvar = self.get_mu_logvar(x_samples)
+        return (-(mu - y_samples) ** 2 / logvar.exp() - logvar).sum(dim=1).mean(dim=0)

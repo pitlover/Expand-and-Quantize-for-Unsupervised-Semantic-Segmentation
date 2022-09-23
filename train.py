@@ -253,7 +253,9 @@ def valid_epoch(
             "Linear_Accuracy": linear_result['accuracy'].item(),
         }
         for k, v in result.items():
+            k = "VAL_" + k
             log_dict[k] = v.item() if isinstance(v, torch.Tensor) else v
+
         if not is_crf:
             wandb.log(log_dict)
 

@@ -2,19 +2,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
+from model.blocks.club_encoder import CLUBEncoder
 
 
 class InfoNCELoss(nn.Module):
     def __init__(self,
                  normalize: str = "l2",
                  temperature: float = 1.0,
+                 neg_sample: int = 100,
                  reduction: str = "mean"):
         super().__init__()
 
         self.normalize = normalize
         self.temperature = temperature
         self.reduction = reduction
-        self.num_neg = 1000
+        self.num_neg = neg_sample
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         """
@@ -32,15 +34,14 @@ class InfoNCELoss(nn.Module):
         flat_x2 = x2.view(-1, d)
 
         # TODO except self-sample + 4-part
-        # make paired random negative sample
+        # TODO 겁나 느린데 이게 정상인가..?
+
+        # make paired random negative sample + not exclude my-self
         rand_neg = torch.zeros(b * h * w, self.num_neg, d, device=x1.device)  # (bhw, n, d)
         indices = torch.randint(b * h * w, (b * h * w, self.num_neg), device=x1.device)
         for idx, data in enumerate(indices):
             rand_neg[idx] = flat_x1[data]
-        # rand_indices = list(range((b-1) * h * w))
-        # random.shuffle(rand_indices)
-        # indices = rand_indices[:self.num_neg]
-        # rand_neg = flat_x1[indices]
+
 
         if self.normalize == "l2":
             x1_norm = F.normalize(flat_x1, dim=-1)
@@ -57,18 +58,23 @@ class InfoNCELoss(nn.Module):
         #     x2_norm = x2
         else:
             raise ValueError(f"Unsupported normalize type {self.normalize}")
-
+        # pos
         pos_similarity = torch.matmul(x1_norm, x2_norm.T)  # (bhw, d) * (d, bhw) -> (bhw, bhw)
         pos_similarity = torch.exp(pos_similarity / self.temperature)
-        pos = torch.mean(pos_similarity, dim=1)
+        pos_mask = torch.eye(len(x1_norm), device=x1.device)
 
+        # neg
         x1_norm = x1_norm.unsqueeze(1)
         neg_similarity = torch.matmul(x1_norm, neg_norm.transpose(-2, -1))  # (bhw, 1, d) * (bhw, d, k) -> (bhw, 1, k)
         neg_similarity = neg_similarity.squeeze(1)  # (bhw, k)
         neg_similarity = torch.exp(neg_similarity / self.temperature)
-        neg = torch.mean(neg_similarity, dim=1)
 
-        loss = - (torch.log(pos) - torch.log(pos + neg))
+        # pos = torch.mean(pos_similarity * pos_mask, dim=1)
+        # neg = torch.mean(neg_similarity, dim=1)
+        positive = torch.sum(pos_similarity * pos_mask, dim=1)  # (bhw, )
+        negative = torch.sum(neg_similarity, dim=1)  # (bhw, k) -> (bhw)
+
+        loss = - (torch.log(positive) - torch.log(positive + negative))
 
         if self.reduction == "sum":
             loss = torch.sum(loss)
@@ -80,39 +86,47 @@ class InfoNCELoss(nn.Module):
 
 class CLUBLoss(nn.Module):
     def __init__(self,
+                 input_dim: int,
+                 output_dim: int,
+                 hidden_dim: int,
                  reduction: str = "mean"):
         super().__init__()
 
+        self.club_enc = CLUBEncoder(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim)
         self.reduction = reduction
 
     def forward(self,
                 x: torch.Tensor,
-                mu: torch.Tensor,
-                logvar: torch.Tensor) -> torch.Tensor:
+                y: torch.Tensor,
+                ) -> torch.Tensor:
         '''
 
-        :param x:  (b, d, h, w)
+        :param x:  (b, d, h, w) -> (bhw, d)
         :param mu:
         :param logvar:
         :return:
         '''
         x = x.permute(0, 2, 3, 1).contiguous()
         b, h, w, d = x.shape
-        flat_x = x.view(-1, d)
+        flat_x = x.view(-1, d)  # (bhw, d)
 
-        pos = -0.5 * torch.sum(
-            torch.square(flat_x - mu) / torch.exp(logvar), dim=-1
-        )
+        y = y.permute(0, 2, 3, 1).contiguous()
+        flat_y = y.view(-1, d)  # (bhw, d)
 
-        neg = -0.5 * torch.mean(
-            torch.sum(
-                torch.square(flat_x.unsqueeze(0) - mu.unsqueeze(1)) /
-                torch.exp(logvar.unsqueeze(1)),
-                dim=-1
-            ),
-            dim=-1
-        )
-        loss = pos - neg
+        # TODO check club loss -> explode
+        # TODO target -> local_feat1 or local_feat2 ?
+        mu, logvar = self.club_enc(flat_x)
+
+        # log of conditional probability of positive sample pairs
+        positive = - (mu - flat_y) ** 2 / 2. / logvar.exp()
+
+        prediction_1 = mu.unsqueeze(1)  # shape [nsample,1,dim]
+        y_samples_1 = flat_y.unsqueeze(0)  # shape [1,nsample,dim]
+
+        # log of conditional probability of negative sample pairs
+        negative = - ((y_samples_1 - prediction_1) ** 2).mean(dim=1) / 2. / logvar.exp()
+
+        loss = positive.sum(dim=-1) - negative.sum(dim=-1)
 
         if self.reduction == "sum":
             loss = torch.sum(loss)
@@ -121,11 +135,17 @@ class CLUBLoss(nn.Module):
 
         return loss
 
-    def cal_distance(self, x, y):
+    def cal_distance(self, x, y):  # TODO x.unsqueeze(1) - y.unsqueeze(0)
+        '''
+
+        :param x: (bhw, d)
+        :param y: (bhw, d)
+        :return:
+        '''
         distance = (
                 torch.sum(x ** 2, dim=1, keepdim=True) +  # (bhw, d) -> (bhw, 1)
-                torch.sum(y ** 2, dim=1) -  # (K, d) -> (K,) == (1, K)
-                2 * torch.matmul(x, y.t())  # (n, K)
+                torch.sum(y ** 2, dim=1) -  # ((bhw, d) -> (bhw,) == (1, K)
+                2 * torch.matmul(x, y.t())  # (bhw, d) * (d, bhw) -> (bhw, bhw)
         )
 
         return distance

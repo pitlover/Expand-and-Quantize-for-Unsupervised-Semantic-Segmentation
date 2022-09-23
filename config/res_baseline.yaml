@@ -39,9 +39,10 @@ loss:
   club_weight: 1.0
 
   info_nce:
-    neg_sample: 100
+    neg_sample: 16
     temperature: 1.0
     normalize: "l2"
+    cal_type : "random" # "random", "point", "distance"
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -60,10 +61,10 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
+    batch_size: 8  # total
     num_workers: 8  # total
   val:
-    batch_size: 32  # total
+    batch_size: 8  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
@@ -71,6 +72,10 @@ optimizer:
   model:
     name: "adamw"
     lr: 3.0e-4
+    weight_decay: 1.0e-4
+  club_enc:
+    name: "adamw"
+    lr: 1.0e-6
     weight_decay: 1.0e-4
   cluster:
     name: "adam"
@@ -83,6 +88,8 @@ optimizer:
 scheduler:
   model:
     name: "cos" # cos, constant
+  club_enc :
+    name : "cos"
   cluster:
     name: "cos"
   linear:

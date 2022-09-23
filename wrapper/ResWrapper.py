@@ -4,6 +4,7 @@ import torch.nn as nn
 from model.dino_stego import DINOStego
 from model.evaluator import UnSegEvaluator
 
+
 __all__ = [
     "ResWrapper"
 ]
@@ -28,6 +29,7 @@ class ResWrapper(nn.Module):
         self.contra_neg_weight = cfg["loss"].get("club_weight", 0.0)
 
         self.output_dim = cfg["model"]["hidden_dim"]
+
         self.evaluator = UnSegEvaluator(
             self.output_dim, self.num_classes, self.extra_classes
         )
@@ -35,9 +37,10 @@ class ResWrapper(nn.Module):
     def forward(self,
                 img: torch.Tensor,
                 label: torch.Tensor,
+                club_optimizer,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
-        dino_feat, semantic_feat, output = self.model(img)
+        dino_feat, semantic_feat, output = self.model(img, club_optimizer)
 
         model_loss = output["recon-loss"] * self.recon_weight
 

@@ -42,9 +42,11 @@ def build_model(cfg: dict,
     return model
 
 
-def split_params_for_optimizer(model):
+def split_params_for_optimizer(model, cfg):  # cfg["optimizer"]
     params = []
+    params_club_enc = []
     params_no_wd = []
+    params_club_enc_no_wd = []
     for module_name, module in model.named_modules():
         if isinstance(module, (VectorQuantizer, EMAVectorQuantizer, EmbeddingEMA)):
             vq_params = [p for p in list(module.parameters(recurse=False)) if p.requires_grad]
@@ -53,6 +55,7 @@ def split_params_for_optimizer(model):
             for param in module.parameters(recurse=False):
                 if not param.requires_grad:
                     continue
+
                 if param.ndim > 1:
                     params.append(param)
                 else:
@@ -60,11 +63,13 @@ def split_params_for_optimizer(model):
 
     params_for_optimizer = [
         {"params": params},
-        {"params": params_no_wd, "weight_decay": 0.0},
+        {"params": params_no_wd, "weight_decay": 0.0}
+
     ]
     return params_for_optimizer
 
 
+# TODO club_enc lr make decrease
 def build_optimizer(cfg: dict, params):
     # cfg = cfg["optimizer"]["model" / "cluster" / "linear"]
 

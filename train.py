@@ -26,6 +26,7 @@ from wrapper.UnsegWrapper import DINOUnSegWrapper
 def train_epoch(
         model,
         optimizers,
+        club_optimizer,
         schedulers,
         train_dataloader,
         valid_dataloader,
@@ -63,13 +64,7 @@ def train_epoch(
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
-        # img_pos = data["img_pos"].to(device, non_blocking=True)
-
-        # TODO add geometric augmentation
-        # img = data["img_aug"].to(device, non_blocking=True)
-        # label = data["label_aug"].to(device, non_blocking=True)
         data_time = time.time() - data_start_time
-
         # -------------------------------- loss -------------------------------- #
         if it % num_accum == 0:
             for optim in optimizers:
@@ -77,7 +72,7 @@ def train_epoch(
 
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
-            total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+            total_loss, output, _ = model(img, label, club_optimizer)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -92,11 +87,9 @@ def train_epoch(
             step_time = time.time() - step_start_time
 
             current_iter += 1
-
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
                 total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
-
                 loss = total_loss / num_accum
                 loss.backward()
         else:  # non-update step and not DDP
@@ -104,7 +97,6 @@ def train_epoch(
 
             loss = total_loss / num_accum
             loss.backward()
-
         # -------------------------------- print -------------------------------- #
 
         if it % print_interval == 0:
@@ -157,6 +149,7 @@ def train_epoch(
                     torch.save({
                         "model": model_m.state_dict(),
                         "optimizer": [optim.state_dict() for optim in optimizers],
+                        "club_optimizer" : club_optimizer.state_dict(),
                         "scheduler": [sched.state_dict() for sched in schedulers],
                         "best": best_metric.copy(),
                         "epoch": current_epoch,
@@ -289,8 +282,10 @@ def run(cfg: Dict, debug: bool = False) -> None:
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = DistributedDataParallel(model, device_ids=[local_rank], output_device=device)
         model_m = model.module  # actual model without wrapping
+
     else:
         model_m = model
+
     if is_master():
         print(model)
         p1, p2 = count_params(model_m.model.parameters(), requires_grad=True)
@@ -305,11 +300,15 @@ def run(cfg: Dict, debug: bool = False) -> None:
     # ======================================================================================== #
     # Optimizer & Scheduler
     # ======================================================================================== #
-    model_params = split_params_for_optimizer(model_m.model)
+    model_params = split_params_for_optimizer(model_m.model, cfg["optimizer"])
+    club_params = model_m.model.club_enc.parameters()
     cluster_params = model_m.evaluator.cluster_probe.parameters()
     linear_params = model_m.evaluator.linear_probe.parameters()
 
     model_optimizer = build_optimizer(cfg["optimizer"]["model"], model_params)
+    print(club_params)
+    exit()
+    club_optimizer = build_optimizer(cfg["optimizer"]["club_enc"], club_params)
     cluster_optimizer = build_optimizer(cfg["optimizer"]["cluster"], cluster_params)
     linear_optimizer = build_optimizer(cfg["optimizer"]["linear"], linear_params)
 
@@ -319,12 +318,14 @@ def run(cfg: Dict, debug: bool = False) -> None:
     num_accum = cfg["train"].get("num_accum", 1)
     model_scheduler = build_scheduler(cfg["scheduler"]["model"], model_optimizer, iter_per_epoch, num_accum,
                                       epoch=cfg["train"]["max_epochs"])
+    club_scheduler = build_scheduler(cfg["scheduler"]["club_enc"], club_optimizer, iter_per_epoch, num_accum,
+                                     epoch=cfg["train"]["max_epochs"])
     cluster_scheduler = build_scheduler(cfg["scheduler"]["cluster"], cluster_optimizer, iter_per_epoch, num_accum,
                                         epoch=cfg["train"]["max_epochs"])
     linear_scheduler = build_scheduler(cfg["scheduler"]["linear"], linear_optimizer, iter_per_epoch, num_accum,
                                        epoch=cfg["train"]["max_epochs"])
 
-    schedulers = [model_scheduler, cluster_scheduler, linear_scheduler]
+    schedulers = [model_scheduler, cluster_scheduler, linear_scheduler, club_scheduler]
 
     for m in model.modules():
         if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.SyncBatchNorm)):
@@ -365,7 +366,8 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
         # -------- train body -------- #
         epoch_start_time = time.time()  # second
-        current_iter, best_metric, best_epoch, best_iter = train_epoch(model, optimizers, schedulers, train_dataloader,
+        current_iter, best_metric, best_epoch, best_iter = train_epoch(model, optimizers, club_optimizer, schedulers,
+                                                                       train_dataloader,
                                                                        valid_dataloader,
                                                                        cfg, device, save_dir, current_epoch,
                                                                        current_iter, best_metric, best_epoch, best_iter)

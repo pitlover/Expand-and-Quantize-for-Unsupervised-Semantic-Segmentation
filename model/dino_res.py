@@ -7,6 +7,8 @@ import torchvision.transforms as transforms
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import InfoNCELoss, CLUBLoss
+from model.blocks.club_encoder import CLUBEncoder
+from model.blocks.club_encoder import Gaussian_log_likelihood
 
 
 class DINORes(nn.Module):
@@ -55,8 +57,13 @@ class DINORes(nn.Module):
         # -------- loss -------- #
         self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
                                         neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
-                                        temperature=self.cfg_loss["info_nce"].get("temperature", 1.0))
-
+                                        temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
+                                        cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
+                                        )
+        self.club_enc = CLUBEncoder(input_dim=self.local_dim,
+                                    output_dim=self.semantic_dim,
+                                    hidden_dim=self.hidden_dim
+                                    )
         self.club_loss = CLUBLoss(input_dim=self.local_dim, output_dim=self.semantic_dim, hidden_dim=self.hidden_dim)
 
     def _photometric_aug(self, x: torch.Tensor):
@@ -95,7 +102,27 @@ class DINORes(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def forward(self, img: torch.Tensor
+    def _train_club_enc(self, local_feat, club_optimizer):
+        for p in club_optimizer.parameters():
+            p.requires_grad = True
+
+        club_optimizer.zero_grad()
+
+        detach_local_feat = local_feat.clone().detach()
+        detach_local_feat1, detach_local_feat2 = torch.chunk(detach_local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
+
+        p_mu, p_logvar = self.enc_club(detach_local_feat1)
+        loss_enc_club = -5 * Gaussian_log_likelihood(
+            detach_local_feat2, p_mu, p_logvar,
+            reduction="mean"
+        )
+        loss_enc_club.backward()
+        club_optimizer.step()
+
+        for p in club_optimizer.parameters():
+            p.requires_grad = False
+
+    def forward(self, img: torch.Tensor, club_optimizer
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
 
         img_aug_1 = img  # (b, 3, h, w)
@@ -113,6 +140,8 @@ class DINORes(nn.Module):
 
         semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
         local_feat = self.local_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
+
+        self._train_club_enc(local_feat, club_optimizer)
 
         if self.agg_type == "concat":
             feat = torch.cat([semantic_feat, local_feat], dim=1)

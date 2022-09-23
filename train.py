@@ -280,7 +280,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
     model = model.to(device)
     if is_distributed_set():
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = DistributedDataParallel(model, device_ids=[local_rank], output_device=device)
+        model = DistributedDataParallel(model, device_ids=[local_rank], output_device=device, find_unused_parameters=True)
         model_m = model.module  # actual model without wrapping
 
     else:
@@ -306,8 +306,6 @@ def run(cfg: Dict, debug: bool = False) -> None:
     linear_params = model_m.evaluator.linear_probe.parameters()
 
     model_optimizer = build_optimizer(cfg["optimizer"]["model"], model_params)
-    print(club_params)
-    exit()
     club_optimizer = build_optimizer(cfg["optimizer"]["club_enc"], club_params)
     cluster_optimizer = build_optimizer(cfg["optimizer"]["cluster"], cluster_params)
     linear_optimizer = build_optimizer(cfg["optimizer"]["linear"], linear_params)

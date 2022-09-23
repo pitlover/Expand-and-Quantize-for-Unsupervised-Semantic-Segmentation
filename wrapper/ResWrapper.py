@@ -4,7 +4,6 @@ import torch.nn as nn
 from model.dino_stego import DINOStego
 from model.evaluator import UnSegEvaluator
 
-
 __all__ = [
     "ResWrapper"
 ]
@@ -37,7 +36,7 @@ class ResWrapper(nn.Module):
     def forward(self,
                 img: torch.Tensor,
                 label: torch.Tensor,
-                club_optimizer,
+                club_optimizer=None,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
         dino_feat, semantic_feat, output = self.model(img, club_optimizer)

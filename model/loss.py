@@ -46,10 +46,7 @@ class InfoNCELoss(nn.Module):
         for idx, data in enumerate(indices):
             rand_neg[idx] = flat_x1[data]
 
-        neg = self._normalize(rand_neg)
-        neg_similarity = self.paired_similarity(flat_x1, neg)
-
-        return neg_similarity
+        return rand_neg
 
     def distance(self, flat_x1) -> Tuple[torch.Tensor, torch.Tensor]:
         # neg
@@ -63,15 +60,11 @@ class InfoNCELoss(nn.Module):
         # TODO implement not finished -> flat_x1 value need
         print(similarity.shape, negative_index.shape)
         exit()
-        # paired_neg : (bhw, n, d)
-        neg = self._normalize(paired_neg)
-        neg_similarity = self.paired_similarity(flat_x1, neg)
-
         return neg_similarity
 
-    def paired_similarity(self, flat_x1, neg):
-        flat_x1 = flat_x1.unsqueeze(1)
-        neg_similarity = torch.matmul(flat_x1, neg.transpose(-2, -1))  # (bhw, 1, d) * (bhw, d, k) -> (bhw, 1, k)
+    def paired_similarity(self, x, neg):
+        x = x.unsqueeze(1)
+        neg_similarity = torch.matmul(x, neg.transpose(-2, -1))  # (bhw, 1, d) * (bhw, d, k) -> (bhw, 1, k)
         neg_similarity = neg_similarity.squeeze(1)  # (bhw, k)
         neg_similarity = torch.exp(neg_similarity / self.temperature)
 
@@ -92,20 +85,21 @@ class InfoNCELoss(nn.Module):
         x2 = x2.permute(0, 2, 3, 1).contiguous()
         flat_x2 = x2.view(-1, d)
 
-        # TODO except self-sample + 4-part
+        if self.cal_type == "random":
+            neg = self.random(flat_x1)
+        elif self.cal_type == "distance":
+            neg = self.distance(flat_x1)
+        else:
+            raise ValueError(f"No support {self.cal_type}")
 
+        # TODO except self-sample + 4-part
         x1_norm = self._normalize(flat_x1)
         x2_norm = self._normalize(flat_x2)
+        neg_norm = self._normalize(neg)
 
         pos_similarity = torch.multiply(x1_norm, x2_norm)
         pos_similarity = torch.exp(pos_similarity / self.temperature)
-
-        if self.cal_type == "random":
-            neg_similarity = self.random(x1_norm)
-        elif self.cal_type == "distance":
-            neg_similarity = self.distance(x1_norm)
-        else:
-            raise ValueError(f"No support {self.cal_type}")
+        neg_similarity = self.paired_similarity(x1_norm, neg_norm)
 
         positive = torch.sum(pos_similarity, dim=1)  # (bhw, )
         negative = torch.sum(neg_similarity, dim=1)  # (bhw, k) -> (bhw) #noqa
@@ -122,19 +116,12 @@ class InfoNCELoss(nn.Module):
 
 class CLUBLoss(nn.Module):
     def __init__(self,
-                 input_dim: int,
-                 output_dim: int,
-                 hidden_dim: int,
                  reduction: str = "mean"):
         super().__init__()
 
-        self.club_enc = CLUBEncoder(input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim)
         self.reduction = reduction
 
-    def forward(self,
-                x: torch.Tensor,
-                y: torch.Tensor,
-                ) -> torch.Tensor:
+    def forward(self, x, p_mu, p_logvar) -> torch.Tensor:
         '''
 
         :param x:  (b, d, h, w) -> (bhw, d)
@@ -146,19 +133,14 @@ class CLUBLoss(nn.Module):
         b, h, w, d = x.shape
         flat_x = x.view(-1, d)  # (bhw, d)
 
-        y = y.permute(0, 2, 3, 1).contiguous()
-        flat_y = y.view(-1, d)  # (bhw, d)
-
-        mu, logvar = self.club_enc(flat_x)
-
         positive = -0.5 * torch.sum(
-            torch.square(flat_y - mu) / torch.exp(logvar), dim=-1
+            torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1
         )
 
         negative = -0.5 * torch.mean(
             torch.sum(
-                torch.square(flat_y.unsqueeze(0) - mu.unsqueeze(1)) /
-                torch.exp(logvar.unsqueeze(1)),
+                torch.square(flat_x.unsqueeze(0) - p_mu.unsqueeze(1)) /
+                torch.exp(p_logvar.unsqueeze(1)),
                 dim=-1
             ),
             dim=-1

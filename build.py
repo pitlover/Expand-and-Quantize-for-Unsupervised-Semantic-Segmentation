@@ -174,7 +174,7 @@ def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> D
             num_replicas=get_world_size(),
             rank=get_rank(),
             shuffle=shuffle,
-            drop_last=shuffle,
+            drop_last=shuffle
         )
         world_size = get_world_size()
         loader = DataLoader(

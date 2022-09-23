@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_bs64_5-cropX"
+  name: "RES_baseline_rand"
   notes: "only_enc_dec, no_contrast, no_mi"
 
 # ---------------------------------------------------------------- #
@@ -61,7 +61,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 8  # total
+    batch_size: 14  # total
     num_workers: 8  # total
   val:
     batch_size: 8  # total
@@ -71,7 +71,7 @@ dataloader:
 optimizer:
   model:
     name: "adamw"
-    lr: 3.0e-4
+    lr: 1.0e-6
     weight_decay: 1.0e-4
   club_enc:
     name: "adamw"

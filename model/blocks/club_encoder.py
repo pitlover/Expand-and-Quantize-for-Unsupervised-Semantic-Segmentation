@@ -46,16 +46,19 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
 
         self.apply(weights_init)
 
-    def forward(self, x_samples: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         '''
 
         :param x_samples: (b, d, h, w)
         :return:     mu : (bhw, d)
                  logvar : (bhw, d)
         '''
-        mu = self.p_mu(x_samples)
-        logvar = self.p_logvar(x_samples)
+        b, d, h, w = x.shape
+        x = x.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        flat_x1 = x.view(-1, d)  # (bhw, d)
 
+        mu = self.p_mu(flat_x1)
+        logvar = self.p_logvar(flat_x1)
         return mu, logvar
 
     def loglikeli(self, x_samples, y_samples):  # unnormalized loglikelihood
@@ -68,14 +71,19 @@ def Gaussian_log_likelihood(
         mu: torch.Tensor, logvar: torch.Tensor,
         reduction: str = "mean"
 ) -> torch.Tensor:
+
+    b, d, h, w = x.shape
+    x = x.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+    flat_x1 = x.view(-1, d)  # (bhw, d)
+
     loss = -0.5 * torch.sum(
-        logvar + torch.square(x - mu) / torch.exp(logvar),
+        logvar + torch.square(flat_x1 - mu) / torch.exp(logvar),
         dim=-1
     )
 
     if reduction == "sum":
-        return torch.sum(loss)
+        loss = torch.sum(loss)
     elif reduction == "mean":
-        return torch.mean(loss)
-    else:
-        return loss
+        loss = torch.mean(loss)
+
+    return loss

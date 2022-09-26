@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_rand"
+  name: "RES_baseline_rand_smalllr_e-5"
   notes: "only_enc_dec, no_contrast, no_mi"
 
 # ---------------------------------------------------------------- #
@@ -36,7 +36,7 @@ model:
 loss:
   recon_weight: 1.0
   info_nce_weight: 1.0
-  club_weight: 1.0
+  club_weight: 0.0
 
   info_nce:
     neg_sample: 16
@@ -61,17 +61,17 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 14  # total
+    batch_size: 64  # total
     num_workers: 8  # total
   val:
-    batch_size: 8  # total
+    batch_size: 32  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
   model:
     name: "adamw"
-    lr: 1.0e-6
+    lr: 1.0e-5
     weight_decay: 1.0e-4
   club_enc:
     name: "adamw"

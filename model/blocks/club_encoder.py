@@ -68,10 +68,10 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
 
 def Gaussian_log_likelihood(
         x: torch.Tensor,
-        mu: torch.Tensor, logvar: torch.Tensor,
+        mu: torch.Tensor,
+        logvar: torch.Tensor,
         reduction: str = "mean"
 ) -> torch.Tensor:
-
     b, d, h, w = x.shape
     x = x.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
     flat_x1 = x.view(-1, d)  # (bhw, d)

@@ -134,19 +134,32 @@ class CLUBLoss(nn.Module):
         flat_x = x.view(-1, d)  # (bhw, d)
 
         positive = -0.5 * torch.sum(
-            torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1
+            torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1 # (bhw, d) -> (bhw)
         )
+        split_p_mu = torch.chunk(p_mu, chunks=b, dim=0)  # split tensor for code optimization
+        split_p_logvar = torch.chunk(p_logvar, chunks=b, dim=0)  # split tensor for code optimization
+        split_positive = torch.chunk(positive, chunks=b, dim=0)
 
-        negative = -0.5 * torch.mean(
-            torch.sum(
-                torch.square(flat_x.unsqueeze(0) - p_mu.unsqueeze(1)) /
-                torch.exp(p_logvar.unsqueeze(1)),
+        loss = 0
+        for iter in range(b):
+            p_mu_ = split_p_mu[iter]
+            p_logvar_ = split_p_logvar[iter]
+
+            negative = -0.5 * torch.mean(
+                torch.sum(
+                    torch.square(flat_x.unsqueeze(0) - p_mu_.unsqueeze(1)) /
+                    torch.exp(p_logvar_.unsqueeze(1)),
+                    dim=-1
+                ),
                 dim=-1
-            ),
-            dim=-1
-        )
+            )
+            loss_ = split_positive[iter] - negative  # bhw/b
+            loss += loss_
 
-        loss = positive - negative  # (bhw, )
+        loss = loss / b
+
+        del positive, negative
+        del split_positive, split_p_mu, split_p_logvar
 
         if self.reduction == "sum":
             loss = torch.sum(loss)

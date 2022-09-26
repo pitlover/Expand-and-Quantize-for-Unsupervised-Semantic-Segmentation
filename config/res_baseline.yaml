@@ -30,7 +30,6 @@ model:
   hidden_dim: 512
   last_norm: false
   agg_type: "concat"
-  neg_sample: 100
 
 # ---------------------------------------------------------------- #
 loss:
@@ -103,6 +102,6 @@ eval:
 train:
   max_epochs: 10
   print_interval_iters: 25
-  valid_interval_iters: 25
+  valid_interval_iters: 100
   clip_grad: 1.0
   num_accum: 1

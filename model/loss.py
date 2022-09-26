@@ -24,43 +24,51 @@ class InfoNCELoss(nn.Module):
     def _normalize(self, x):
         if self.normalize == "l2":
             x_norm = F.normalize(x, dim=-1)
-        # elif self.normalize == "z_norm":  # z-normalize
-        #     x1_flat_std, x1_flat_mean = torch.std_mean(flat_x1, dim=1, keepdim=True)  # (n, 1)
-        #     x1_norm = (flat_x1 - x1_flat_mean) / (x1_flat_std + 1e-5)
-        #
-        #     x2_flat_std, x2_flat_mean = torch.std_mean(flat_x2, dim=1, keepdim=True)  # (n, 1)
-        #     x2_norm = (flat_x2 - x2_flat_mean) / (x2_flat_std + 1e-5)
-        # elif self.normalize == "none":
-        #     x1_norm = x1
-        #     x2_norm = x2
+        elif self.normalize == "z_norm":  # z-normalize
+            x_std, x_mean = torch.std_mean(x, dim=1, keepdim=True)  # (n, 1)
+            x_norm = (x - x_mean) / (x_std + 1e-5)
+        elif self.normalize == "none":
+            x_norm = x
         else:
             raise ValueError(f"Unsupported normalize type {self.normalize}")
 
         return x_norm
 
-    def random(self, flat_x1) -> Tuple[torch.Tensor, torch.Tensor]:
-        # neg
-        bhw, d = flat_x1.shape
-        rand_neg = torch.zeros(bhw, self.num_neg, d, device=flat_x1.device)  # (bhw, n, d)
-        indices = torch.randint(bhw, (bhw, self.num_neg), device=flat_x1.device)
+    def random(self, x) -> torch.Tensor:  # TODO exclude myself
+        bhw, d = x.shape
+        rand_neg = torch.zeros(bhw, self.num_neg, d, device=x.device)  # (bhw, n, d)
+        indices = torch.randint(bhw, (bhw, self.num_neg), device=x.device)
         for idx, data in enumerate(indices):
-            rand_neg[idx] = flat_x1[data]
+            rand_neg[idx] = x[data]
+
+        del indices
 
         return rand_neg
 
-    def distance(self, flat_x1) -> Tuple[torch.Tensor, torch.Tensor]:
-        # neg
-        # negative samples from myself
-        similarity = torch.matmul(flat_x1, flat_x1.T)
-        similarity = torch.exp(similarity / self.temperature)
-        self_mask = torch.eye(len(flat_x1), device=flat_x1.device)
-        similarity = similarity * self_mask  # exclude own similiarty  bhw * bhw
-        negative_index = torch.topk(similarity, self.num_neg, largest=False, dim=-1)  # (bhw, n)
+    def distance(self, x, b) -> torch.Tensor:
+        '''
 
-        # TODO implement not finished -> flat_x1 value need
-        print(similarity.shape, negative_index.shape)
-        exit()
-        return neg_similarity
+        :param x: flat_x => (bhw, d)
+        :param b: batch_size
+        :return:
+        '''
+        split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
+        rand_neg = torch.zeros(x.shape[0], self.num_neg, d, device=x.device)
+
+        for iter in range(b):
+            similarity_ = torch.matmul(split_x[iter], x.T)  # (bhw/b, d) * (d, bhw) -> (bhw/b, bhw)
+            self_mask_ = torch.where(torch.eye(split_x[iter].shape[0], x.shape[0]) == 0, 1,
+                                     10 ** 6)  # TODO check overflow
+            similarity_ = similarity_ * self_mask_
+            negative_index = torch.topk(similarity_, self.num_neg, largest=False, dim=-1)  # (bhw/b, n)
+            rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
+            if iter == 0:
+                rand_neg = rand_neg_
+            else:
+                rand_neg = torch.cat([rand_neg, rand_neg_], dim=0)
+        del split_x, similarity_, self_mask_, negative_index, rand_neg_
+
+        return rand_neg
 
     def paired_similarity(self, x, neg):
         x = x.unsqueeze(1)
@@ -88,11 +96,10 @@ class InfoNCELoss(nn.Module):
         if self.cal_type == "random":
             neg = self.random(flat_x1)
         elif self.cal_type == "distance":
-            neg = self.distance(flat_x1)
+            neg = self.distance(flat_x1, b)
         else:
             raise ValueError(f"No support {self.cal_type}")
 
-        # TODO except self-sample + 4-part
         x1_norm = self._normalize(flat_x1)
         x2_norm = self._normalize(flat_x2)
         neg_norm = self._normalize(neg)
@@ -134,7 +141,7 @@ class CLUBLoss(nn.Module):
         flat_x = x.view(-1, d)  # (bhw, d)
 
         positive = -0.5 * torch.sum(
-            torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1 # (bhw, d) -> (bhw)
+            torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1  # (bhw, d) -> (bhw)
         )
         split_p_mu = torch.chunk(p_mu, chunks=b, dim=0)  # split tensor for code optimization
         split_p_logvar = torch.chunk(p_logvar, chunks=b, dim=0)  # split tensor for code optimization

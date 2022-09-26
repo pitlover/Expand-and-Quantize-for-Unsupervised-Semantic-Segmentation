@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_rand_smalllr_e-5"
+  name: "RES_baseline_rand_neg_smalllr_e-5"
   notes: "only_enc_dec, no_contrast, no_mi"
 
 # ---------------------------------------------------------------- #
@@ -35,7 +35,7 @@ model:
 loss:
   recon_weight: 1.0
   info_nce_weight: 1.0
-  club_weight: 0.0
+  club_weight: 1.0
 
   info_nce:
     neg_sample: 16
@@ -74,7 +74,7 @@ optimizer:
     weight_decay: 1.0e-4
   club_enc:
     name: "adamw"
-    lr: 1.0e-6
+    lr: 1.0e-5
     weight_decay: 1.0e-4
   cluster:
     name: "adam"
@@ -102,6 +102,6 @@ eval:
 train:
   max_epochs: 10
   print_interval_iters: 25
-  valid_interval_iters: 100
+  valid_interval_iters: 25
   clip_grad: 1.0
   num_accum: 1

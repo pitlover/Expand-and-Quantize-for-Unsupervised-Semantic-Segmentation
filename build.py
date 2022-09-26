@@ -5,7 +5,6 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from utils.dist_utils import is_distributed_set, get_rank, get_world_size
-from model.quantizer import VectorQuantizer, EMAVectorQuantizer, EmbeddingEMA
 from data.dataset import UnSegDataset
 
 from model.dino_unseg import DINOUnSeg
@@ -14,6 +13,8 @@ from model.dino_stego import DINOStego
 from model.dino_vae import DINOVae
 from model.dino_res import DINORes
 
+from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
+from model.blocks.club_encoder import CLUBEncoder
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
@@ -44,15 +45,16 @@ def build_model(cfg: dict,
 
 def split_params_for_optimizer(model, cfg):  # cfg["optimizer"]
     params = []
-    params_club_enc = []
     params_no_wd = []
-    params_club_enc_no_wd = []
+
     for module_name, module in model.named_modules():
         if isinstance(module, (VectorQuantizer, EMAVectorQuantizer, EmbeddingEMA)):
             vq_params = [p for p in list(module.parameters(recurse=False)) if p.requires_grad]
             params_no_wd.extend(vq_params)
+        elif "club_enc" in module_name:
+            continue
         else:
-            for param in module.parameters(recurse=False):
+            for param_name, param in module.named_parameters(recurse=False):
                 if not param.requires_grad:
                     continue
 
@@ -63,13 +65,10 @@ def split_params_for_optimizer(model, cfg):  # cfg["optimizer"]
 
     params_for_optimizer = [
         {"params": params},
-        {"params": params_no_wd, "weight_decay": 0.0}
-
-    ]
+        {"params": params_no_wd, "weight_decay": 0.0}]
     return params_for_optimizer
 
 
-# TODO club_enc lr make decrease
 def build_optimizer(cfg: dict, params):
     # cfg = cfg["optimizer"]["model" / "cluster" / "linear"]
 

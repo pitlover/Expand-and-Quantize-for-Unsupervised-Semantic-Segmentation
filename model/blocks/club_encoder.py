@@ -59,6 +59,7 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
 
         mu = self.p_mu(flat_x1)
         logvar = self.p_logvar(flat_x1)
+
         return mu, logvar
 
     def loglikeli(self, x_samples, y_samples):  # unnormalized loglikelihood

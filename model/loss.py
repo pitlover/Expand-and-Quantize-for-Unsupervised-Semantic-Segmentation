@@ -34,6 +34,17 @@ class InfoNCELoss(nn.Module):
 
         return x_norm
 
+    def point(self, x) -> torch.Tensor:  # TODO exclude myself
+        bhw, d = x.shape
+        rand_neg = torch.zeros(bhw, self.num_neg, d, device=x.device)  # (bhw, n, d)
+        indices = torch.randint(bhw, (bhw, self.num_neg), device=x.device)
+        for idx, data in enumerate(indices):
+            rand_neg[idx] = x[data]
+
+        del indices
+
+        return rand_neg
+
     def random(self, x) -> torch.Tensor:  # TODO exclude myself
         bhw, d = x.shape
         rand_neg = torch.zeros(bhw, self.num_neg, d, device=x.device)  # (bhw, n, d)
@@ -53,7 +64,7 @@ class InfoNCELoss(nn.Module):
         :return:
         '''
         split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
-        rand_neg = torch.zeros(x.shape[0], self.num_neg, d, device=x.device)
+        rand_neg = torch.zeros(x.shape[0], self.num_neg, x.shape[1], device=x.device)
 
         for iter in range(b):
             similarity_ = torch.matmul(split_x[iter], x.T)  # (bhw/b, d) * (d, bhw) -> (bhw/b, bhw)
@@ -97,6 +108,8 @@ class InfoNCELoss(nn.Module):
             neg = self.random(flat_x1)
         elif self.cal_type == "distance":
             neg = self.distance(flat_x1, b)
+        elif self.cal_type == "point":
+            raise ValueError(f"Not implemented yet {self.cal_typel}")
         else:
             raise ValueError(f"No support {self.cal_type}")
 
@@ -118,6 +131,8 @@ class InfoNCELoss(nn.Module):
         elif self.reduction == "mean":
             loss = torch.mean(loss)
 
+        del x1, flat_x1, x2, flat_x2, x1_norm, x2_norm, neg, neg_norm, negative, positive, pos_similarity, neg_similarity
+
         return loss
 
 
@@ -128,7 +143,7 @@ class CLUBLoss(nn.Module):
 
         self.reduction = reduction
 
-    def forward(self, x, p_mu, p_logvar) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, p_mu: torch.tensor, p_logvar: torch.tensor) -> torch.Tensor:
         '''
 
         :param x:  (b, d, h, w) -> (bhw, d)
@@ -143,12 +158,12 @@ class CLUBLoss(nn.Module):
         positive = -0.5 * torch.sum(
             torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1  # (bhw, d) -> (bhw)
         )
-        split_p_mu = torch.chunk(p_mu, chunks=b, dim=0)  # split tensor for code optimization
-        split_p_logvar = torch.chunk(p_logvar, chunks=b, dim=0)  # split tensor for code optimization
-        split_positive = torch.chunk(positive, chunks=b, dim=0)
+        split_p_mu = torch.chunk(p_mu, chunks=4*28, dim=0)  # split tensor for code optimization
+        split_p_logvar = torch.chunk(p_logvar, chunks=4*28, dim=0)  # split tensor for code optimization
+        split_positive = torch.chunk(positive, chunks=4*28, dim=0)
 
         loss = 0
-        for iter in range(b):
+        for iter in range(4*28):
             p_mu_ = split_p_mu[iter]
             p_logvar_ = split_p_logvar[iter]
 
@@ -160,18 +175,18 @@ class CLUBLoss(nn.Module):
                 ),
                 dim=-1
             )
-            loss_ = split_positive[iter] - negative  # bhw/b
-            loss += loss_
+            loss_ = split_positive[iter] - negative  # bhw/28
+            loss += torch.mean(loss_).item()
 
-        loss = loss / b
+        loss = loss / (4*28)
 
         del positive, negative
         del split_positive, split_p_mu, split_p_logvar
 
-        if self.reduction == "sum":
-            loss = torch.sum(loss)
-        elif self.reduction == "mean":
-            loss = torch.mean(loss)
+        # if self.reduction == "sum":
+        #     loss = torch.sum(loss)
+        # elif self.reduction == "mean":
+        #     loss = torch.mean(loss)
 
         return loss
 

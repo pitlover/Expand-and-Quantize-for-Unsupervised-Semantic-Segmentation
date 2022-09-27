@@ -101,25 +101,32 @@ class DINORes(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def _train_club_enc(self, local_feat, club_optimizer):
-        for p in self.club_enc.parameters():
-            p.requires_grad = True
+    def _train_club_enc(self, dino_feat, club_optimizer, output):
+        # for p in self.club_enc.parameters():
+        #     p.requires_grad = True
 
         club_optimizer.zero_grad()
 
-        detach_local_feat = local_feat.clone().detach()
+        detach_local_feat = self.local_enc_proj(dino_feat).detach()
         detach_local_feat1, detach_local_feat2 = torch.chunk(detach_local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
 
-        p_mu, p_logvar = self.club_enc(detach_local_feat1)
-        loss_enc_club = -5 * Gaussian_log_likelihood(
-            detach_local_feat2, p_mu, p_logvar,
-            reduction="mean"
-        )
+        # p_mu, p_logvar = self.club_enc(detach_local_feat1)
+        # loss_enc_club = -Gaussian_log_likelihood(
+        #    detach_local_feat2, p_mu, p_logvar,
+        #    reduction="mean"
+        # ) # TODO Gaussian vs loglikeli
+
+        loss_enc_club = -self.club_enc.loglikeli(detach_local_feat1, detach_local_feat2)
+        output["club-enc-loss"] = loss_enc_club.item()
+
         loss_enc_club.backward()
+        # TODO grad clipping
         club_optimizer.step()
 
-        for p in self.club_enc.parameters():
-            p.requires_grad = False
+        # for p in self.club_enc.parameters():
+        #     p.requires_grad = False
+
+        return output
 
     def forward(self, img: torch.Tensor, club_optimizer=None
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
@@ -137,11 +144,11 @@ class DINORes(nn.Module):
         dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
 
+        if self.training:
+            output = self._train_club_enc(dino_feat, club_optimizer, output)
+
         semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
         local_feat = self.local_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
-
-        if self.training:
-            self._train_club_enc(local_feat, club_optimizer)
 
         if self.agg_type == "concat":
             feat = torch.cat([semantic_feat, local_feat], dim=1)

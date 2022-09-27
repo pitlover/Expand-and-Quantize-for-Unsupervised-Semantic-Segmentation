@@ -85,6 +85,7 @@ def train_epoch(
             for optim, sched in zip(optimizers, schedulers):
                 optim.step()
                 sched.step()
+            schedulers[-1].step() # club_schedulers
             step_time = time.time() - step_start_time
 
             current_iter += 1

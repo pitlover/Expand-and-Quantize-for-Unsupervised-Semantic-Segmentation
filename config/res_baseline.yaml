@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_rand_neg_smalllr_e-5"
+  name: "RES_baseline_rand_neg_smalllr_e-5_newenc"
   notes: "only_enc_dec, no_contrast, no_mi"
 
 # ---------------------------------------------------------------- #
@@ -41,7 +41,7 @@ loss:
     neg_sample: 16
     temperature: 1.0
     normalize: "l2"
-    cal_type : "random" # "random", "point", "distance"
+    cal_type: "random" # "random", "point", "distance"
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -73,7 +73,7 @@ optimizer:
     lr: 1.0e-5
     weight_decay: 1.0e-4
   club_enc:
-    name: "adamw"
+    name: "adam"
     lr: 1.0e-5
     weight_decay: 1.0e-4
   cluster:
@@ -87,8 +87,8 @@ optimizer:
 scheduler:
   model:
     name: "cos" # cos, constant
-  club_enc :
-    name : "cos"
+  club_enc:
+    name: "cos"
   cluster:
     name: "cos"
   linear:

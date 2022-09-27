@@ -34,17 +34,23 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
                  output_dim: int,
                  hidden_dim: int):
         super().__init__()
-        self.p_mu = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
+        self.p_mu = nn.Sequential(nn.Linear(input_dim, hidden_dim * 2),
                                   nn.ReLU(),
-                                  nn.Linear(hidden_dim // 2, output_dim))
+                                  nn.Linear(hidden_dim * 2, output_dim))
 
         # p_logvar outputs log of variance of q(Y|X)
-        self.p_logvar = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
+        self.p_logvar = nn.Sequential(nn.Linear(input_dim, hidden_dim * 2),
                                       nn.ReLU(),
-                                      nn.Linear(hidden_dim // 2, output_dim),
-                                      nn.Tanh())
+                                      nn.Linear(hidden_dim * 2, output_dim),
+                                      nn.Tanh()
+                                      )
 
-        self.apply(weights_init)
+        # self.p_mu = nn.Sequential(nn.Linear(input_dim, output_dim),
+        #                           nn.ReLU())
+        #
+        # self.p_logvar = nn.Sequential(nn.Linear(input_dim, output_dim),
+        #                               nn.LeakyReLU())
+        # self.apply(weights_init)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         '''
@@ -62,9 +68,22 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
 
         return mu, logvar
 
+    def get_mu_logvar(self, flat_x):
+        mu = self.p_mu(flat_x)
+        logvar = self.p_logvar(flat_x)
+
+        return mu, logvar
+
     def loglikeli(self, x_samples, y_samples):  # unnormalized loglikelihood
-        mu, logvar = self.get_mu_logvar(x_samples)
-        return (-(mu - y_samples) ** 2 / logvar.exp() - logvar).sum(dim=1).mean(dim=0)
+        b, d, h, w = x_samples.shape
+        x_samples = x_samples.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        flat_x = x_samples.view(-1, d)  # (bhw, d)
+
+        y_samples = y_samples.permute(0, 2, 3, 1).contiguous()
+        flat_y = y_samples.view(-1, d)
+
+        mu, logvar = self.get_mu_logvar(flat_x)
+        return (-(mu - flat_y) ** 2 / logvar.exp() - logvar).sum(dim=1).mean(dim=0)
 
 
 def Gaussian_log_likelihood(

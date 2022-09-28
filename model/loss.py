@@ -67,17 +67,39 @@ class InfoNCELoss(nn.Module):
         rand_neg = torch.zeros(x.shape[0], self.num_neg, x.shape[1], device=x.device)
 
         for iter in range(b):
+            distance_ = (
+                torch.sum(split_x[iter] ** 2, dim = 1, keep)
+            )
             similarity_ = torch.matmul(split_x[iter], x.T)  # (bhw/b, d) * (d, bhw) -> (bhw/b, bhw)
-            self_mask_ = torch.where(torch.eye(split_x[iter].shape[0], x.shape[0]) == 0, 1,
-                                     10 ** 6)  # TODO check overflow
+            self_mask_ = torch.where(torch.eye(split_x[iter].shape[0], x.shape[0], device=x.device) == 0, 1,
+                                     10 ** 8)  # TODO check overflow
             similarity_ = similarity_ * self_mask_
             negative_index = torch.topk(similarity_, self.num_neg, largest=False, dim=-1)  # (bhw/b, n)
+            print(similarity_)
+            print(negative_index.values)
+            exit()
             rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
             if iter == 0:
                 rand_neg = rand_neg_
             else:
                 rand_neg = torch.cat([rand_neg, rand_neg_], dim=0)
         del split_x, similarity_, self_mask_, negative_index, rand_neg_
+
+        # for iter in range(b):
+        #     similarity_ = torch.matmul(split_x[iter], x.T)  # (bhw/b, d) * (d, bhw) -> (bhw/b, bhw)
+        #     self_mask_ = torch.where(torch.eye(split_x[iter].shape[0], x.shape[0], device=x.device) == 0, 1,
+        #                              10 ** 8)  # TODO check overflow
+        #     similarity_ = similarity_ * self_mask_
+        #     negative_index = torch.topk(similarity_, self.num_neg, largest=False, dim=-1)  # (bhw/b, n)
+        #     print(similarity_)
+        #     print(negative_index.values)
+        #     exit()
+        #     rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
+        #     if iter == 0:
+        #         rand_neg = rand_neg_
+        #     else:
+        #         rand_neg = torch.cat([rand_neg, rand_neg_], dim=0)
+        # del split_x, similarity_, self_mask_, negative_index, rand_neg_
 
         return rand_neg
 

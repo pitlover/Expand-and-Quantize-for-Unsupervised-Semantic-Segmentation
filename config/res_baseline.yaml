@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_rand_neg_smalllr_e-5_newenc"
-  notes: "only_enc_dec, no_contrast, no_mi"
+  name: "RES_baseline_distance_e-5_negnum5"
+  notes: "no neg"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -35,13 +35,13 @@ model:
 loss:
   recon_weight: 1.0
   info_nce_weight: 1.0
-  club_weight: 1.0
+  club_weight: 0.0
 
   info_nce:
-    neg_sample: 16
+    neg_sample: 5
     temperature: 1.0
     normalize: "l2"
-    cal_type: "random" # "random", "point", "distance"
+    cal_type: "distance" # "random", "point", "distance"
 # ---------------------------------------------------------------- #
 dataset:
   train:

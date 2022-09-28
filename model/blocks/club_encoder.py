@@ -34,14 +34,14 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
                  output_dim: int,
                  hidden_dim: int):
         super().__init__()
-        self.p_mu = nn.Sequential(nn.Linear(input_dim, hidden_dim * 2),
+        self.p_mu = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
                                   nn.ReLU(),
-                                  nn.Linear(hidden_dim * 2, output_dim))
+                                  nn.Linear(hidden_dim // 2, output_dim))
 
         # p_logvar outputs log of variance of q(Y|X)
-        self.p_logvar = nn.Sequential(nn.Linear(input_dim, hidden_dim * 2),
+        self.p_logvar = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
                                       nn.ReLU(),
-                                      nn.Linear(hidden_dim * 2, output_dim),
+                                      nn.Linear(hidden_dim // 2, output_dim),
                                       nn.Tanh()
                                       )
 

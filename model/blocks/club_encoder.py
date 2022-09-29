@@ -34,22 +34,34 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
                  output_dim: int,
                  hidden_dim: int):
         super().__init__()
+        # self.p_mu = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
+        #                           nn.ReLU(),
+        #                           nn.Linear(hidden_dim // 2, output_dim))
+        #
+        # # p_logvar outputs log of variance of q(Y|X)
+        # self.p_logvar = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
+        #                               nn.ReLU(),
+        #                               nn.Linear(hidden_dim // 2, output_dim),
+        #                               nn.Tanh()
+        #                               )
+
         self.p_mu = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
                                   nn.ReLU(),
-                                  nn.Linear(hidden_dim // 2, output_dim))
+                                  nn.Linear(hidden_dim // 2, hidden_dim // 2),
+                                  nn.ReLU(),
+                                  nn.Linear(hidden_dim // 2, hidden_dim // 2),
+                                  nn.ReLU(),
+                                  nn.Linear(hidden_dim // 2, output_dim)
+                                  )
 
-        # p_logvar outputs log of variance of q(Y|X)
         self.p_logvar = nn.Sequential(nn.Linear(input_dim, hidden_dim // 2),
                                       nn.ReLU(),
+                                      nn.Linear(hidden_dim // 2, hidden_dim // 2),
+                                      nn.ReLU(),
+                                      nn.Linear(hidden_dim // 2, hidden_dim // 2),
+                                      nn.ReLU(),
                                       nn.Linear(hidden_dim // 2, output_dim),
-                                      nn.Tanh()
-                                      )
-
-        # self.p_mu = nn.Sequential(nn.Linear(input_dim, output_dim),
-        #                           nn.ReLU())
-        #
-        # self.p_logvar = nn.Sequential(nn.Linear(input_dim, output_dim),
-        #                               nn.LeakyReLU())
+                                      nn.Tanh())
         # self.apply(weights_init)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -62,7 +74,6 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
         b, d, h, w = x.shape
         x = x.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
         flat_x1 = x.view(-1, d)  # (bhw, d)
-
         mu = self.p_mu(flat_x1)
         logvar = self.p_logvar(flat_x1)
 
@@ -83,7 +94,8 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
         flat_y = y_samples.view(-1, d)
 
         mu, logvar = self.get_mu_logvar(flat_x)
-        return (-(mu - flat_y) ** 2 / logvar.exp() - logvar).sum(dim=1).mean(dim=0)
+        # TODO check loglikeli weight
+        return 0.5 * (-torch.square(mu - flat_y) / logvar.exp() - logvar).sum(dim=1).mean(dim=0)
 
 
 def Gaussian_log_likelihood(

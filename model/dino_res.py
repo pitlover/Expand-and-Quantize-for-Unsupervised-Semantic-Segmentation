@@ -8,6 +8,7 @@ from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import InfoNCELoss, CLUBLoss
 from model.blocks.club_encoder import CLUBEncoder, Gaussian_log_likelihood
+from torch.nn.utils.clip_grad import clip_grad_norm_
 
 
 class DINORes(nn.Module):
@@ -15,6 +16,7 @@ class DINORes(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.cfg_loss = cfg_loss
+        self.mi_iter = cfg_loss["info_nce"]["mi_iter"]
 
         self.extractor = DinoFeaturizer(cfg["pretrained"])
         self.feat_dim = self.extractor.n_feats  # 384
@@ -101,11 +103,16 @@ class DINORes(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def _train_club_enc(self, dino_feat, club_optimizer, output):
+    def _train_club_enc(self,
+                        dino_feat: torch.Tensor,
+                        club_optimizer,
+                        output: Dict,
+                        scaler: torch.cuda.amp.GradScaler,
+                        iter: int):
         # for p in self.club_enc.parameters():
         #     p.requires_grad = True
 
-        club_optimizer.zero_grad()
+        club_optimizer.zero_grad(set_to_none=True)
 
         detach_local_feat = self.local_enc_proj(dino_feat).detach()
         detach_local_feat1, detach_local_feat2 = torch.chunk(detach_local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
@@ -117,20 +124,26 @@ class DINORes(nn.Module):
         # ) # TODO Gaussian vs loglikeli
 
         loss_enc_club = -self.club_enc.loglikeli(detach_local_feat1, detach_local_feat2)
-        output["club-enc-loss"] = loss_enc_club
+        output[f"[{iter}] club-enc-loss"] = loss_enc_club
 
-        loss_enc_club.backward(retain_graph=True)
-        # TODO grad clipping
-        club_optimizer.step()
+        # TODO check gradient clipping
+        # loss_enc_club.backward(retain_graph=True)
+        scaler.scale(loss_enc_club).backward(retain_graph=True)
 
+        scaler.unscale_(club_optimizer)
+        grad_norm = clip_grad_norm_(self.club_enc.parameters(), max_norm=1.0)
+        output[f"[{iter}] club-grad"] = grad_norm
+        scaler.step(club_optimizer)
+        scaler.update()
+
+        # club_optimizer.step()
         # for p in self.club_enc.parameters():
         #     p.requires_grad = False
 
-        return output
+        return output, club_optimizer
 
-    def forward(self, img: torch.Tensor, club_optimizer=None
+    def forward(self, img: torch.Tensor, club_optimizer=None, scaler=None
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
-
         img_aug_1 = img  # (b, 3, h, w)
         img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
 
@@ -144,8 +157,9 @@ class DINORes(nn.Module):
         dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
 
-        if self.training:
-            output = self._train_club_enc(dino_feat, club_optimizer, output)
+        if self.training and self.cfg_loss["club_weight"] > 0.0:
+            for iter in range(self.mi_iter):
+                output, club_optimizer = self._train_club_enc(dino_feat, club_optimizer, output, scaler, iter)
 
         semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
         local_feat = self.local_enc_proj(dino_feat)  # (2b, hidden_d, h, w)

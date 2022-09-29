@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_neg1_lr_1e-5_distance100"
-  notes: "no neg"
+  name: "RES_baseline_pos0.1_random10"
+  notes: ""
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -34,14 +34,15 @@ model:
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
-  info_nce_weight: 1.0
-  club_weight: 1.0
+  info_nce_weight: 0.1
+  club_weight: 0.01
 
   info_nce:
-    neg_sample: 100
+    mi_iter : 5
+    neg_sample: 5
     temperature: 1.0
     normalize: "l2"
-    cal_type: "distance" # "random", "point", "distance"
+    cal_type: "random" # "random", "point", "distance"
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -60,11 +61,11 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 8  # total
-    num_workers: 8  # total
+    batch_size: 16  # total
+    num_workers: 16  # total
   val:
-    batch_size: 32  # total
-    num_workers: 8  # total
+    batch_size: 16  # total
+    num_workers: 16  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
@@ -74,7 +75,7 @@ optimizer:
     weight_decay: 1.0e-4
   club_enc:
     name: "adam"
-    lr: 1.0e-5
+    lr: 3.0e-6
     weight_decay: 0.0
   cluster:
     name: "adam"
@@ -100,7 +101,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 2
   print_interval_iters: 25
   valid_interval_iters: 25
   clip_grad: 1.0

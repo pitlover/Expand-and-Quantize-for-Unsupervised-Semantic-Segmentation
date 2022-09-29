@@ -68,10 +68,6 @@ class InfoNCELoss(nn.Module):
 
         for iter in range(b * 28):
             distance_ = torch.cdist(split_x[iter], x)
-            # self_mask_ = torch.where(torch.eye(split_x[iter].shape[0], x.shape[0], device=x.device) == 0, 1,
-            #                          0)  # TODO check overflow
-
-            # distance_ = distance_ * self_mask_
             negative_index = torch.topk(distance_, self.num_neg, dim=-1)  # (bhw/b, n)
             rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
             # if iter == 0:
@@ -79,7 +75,7 @@ class InfoNCELoss(nn.Module):
             # else:
             # rand_neg = torch.cat([rand_neg, rand_neg_], dim=0)
             rand_neg[iter * 28: (iter + 1) * 28] = rand_neg_
-        # del split_x, distance_, self_mask_, negative_index, rand_neg_
+        del split_x, distance_, negative_index, rand_neg_
 
         # for iter in range(b):
         #     similarity_ = torch.matmul(split_x[iter], x.T)  # (bhw/b, d) * (d, bhw) -> (bhw/b, bhw)
@@ -176,39 +172,52 @@ class CLUBLoss(nn.Module):
         positive = -0.5 * torch.sum(
             torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1  # (bhw, d) -> (bhw)
         )
-        split_p_mu = torch.chunk(p_mu, chunks=14 * 28, dim=0)  # split tensor for code optimization
-        split_p_logvar = torch.chunk(p_logvar, chunks=14 * 28, dim=0)  # split tensor for code optimization
-        split_positive = torch.chunk(positive, chunks=14 * 28, dim=0)
+        # original code
+        split_p_mu = torch.chunk(p_mu, chunks=h, dim=0)  # split tensor for code optimization
+        split_p_logvar = torch.chunk(p_logvar, chunks=h, dim=0)  # split tensor for code optimization
+        split_positive = torch.chunk(positive, chunks=h, dim=0)
 
+        # negative = -0.5 * torch.mean(
+        #     torch.sum(
+        #         torch.square(flat_x.unsqueeze(0) - p_mu.unsqueeze(1)) /
+        #         torch.exp(p_logvar.unsqueeze(1)),
+        #         dim=-1
+        #     ),
+        #     dim=-1
+        # )
+        #
+        # loss = positive - negative
+        # loss = torch.mean(loss)
+        #
+        # return loss
         loss = torch.tensor(0., device=x.device)
+        for iter in range(h):
+            p_mu_ = split_p_mu[iter]
+            p_logvar_ = split_p_logvar[iter]
 
-        with torch.autograd.set_detect_anomaly(True):
-            for iter in range(14 * 28):
-                p_mu_ = split_p_mu[iter]
-                p_logvar_ = split_p_logvar[iter]
-
-                negative = -0.5 * torch.mean(
-                    torch.sum(
-                        torch.square(flat_x.unsqueeze(0) - p_mu_.unsqueeze(1)) /
-                        torch.exp(p_logvar_.unsqueeze(1)),
-                        dim=-1
-                    ),
+            negative = -0.5 * torch.mean(
+                torch.sum(
+                    torch.square(flat_x.unsqueeze(0) - p_mu_.unsqueeze(1)) /
+                    torch.exp(p_logvar_.unsqueeze(1)),
                     dim=-1
-                )
-                loss_ = split_positive[iter] - negative  # bhw/28
-                loss += loss_
+                ),
+                dim=-1
+            )
+            loss_ = torch.mean(split_positive[iter] - negative)  # bhw/28
+            loss += loss_
+            del loss_, negative, p_mu_, p_logvar_
 
-            loss = loss / (14 * 28)
+        loss = loss / (h)
 
-            del positive, negative
-            del split_positive, split_p_mu, split_p_logvar
+        del positive
+        del split_positive, split_p_mu, split_p_logvar
 
-            # if self.reduction == "sum":
-            #     loss = torch.sum(loss)
-            # elif self.reduction == "mean":
-            #     loss = torch.mean(loss)
+        # if self.reduction == "sum":
+        #     loss = torch.sum(loss)
+        # elif self.reduction == "mean":
+        #     loss = torch.mean(loss)
 
-            return loss
+        return loss
 
         # positive = -0.5 * torch.sum(
         #     torch.square(flat_x - p_mu) / torch.exp(p_logvar), dim=-1  # (bhw, d) -> (bhw)

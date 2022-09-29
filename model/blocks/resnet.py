@@ -98,8 +98,7 @@ class DecResBlock(nn.Module):
         self.conv1 = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
 
         self.norm2 = nn.BatchNorm2d(out_channel)
-        # self.norm2 = nn.BatchNorm2d(in_channel // 16)
-        # self.norm2 = nn.GroupNorm(num_groups=16, num_channels=in_channel)
+        # self.norm2 = nn.GroupNorm(num_groups=16, num_channels=out_channel)
         # self.norm2 = LayerNorm2d(in_channel)
         # self.norm2 = nn.Identity()
 

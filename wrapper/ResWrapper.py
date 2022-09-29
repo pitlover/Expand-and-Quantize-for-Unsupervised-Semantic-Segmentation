@@ -38,8 +38,9 @@ class ResWrapper(nn.Module):
                 label: torch.Tensor,
                 club_optimizer=None,
                 is_crf: bool = False,
+                scaler=None
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
-        dino_feat, semantic_feat, output = self.model(img, club_optimizer)
+        dino_feat, semantic_feat, output = self.model(img, club_optimizer, scaler)
 
         model_loss = output["recon-loss"] * self.recon_weight
 

@@ -62,7 +62,6 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
         b, d, h, w = x.shape
         x = x.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
         flat_x1 = x.view(-1, d)  # (bhw, d)
-
         mu = self.p_mu(flat_x1)
         logvar = self.p_logvar(flat_x1)
 

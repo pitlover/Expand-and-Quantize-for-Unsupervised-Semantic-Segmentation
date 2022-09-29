@@ -101,11 +101,11 @@ class DINORes(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def _train_club_enc(self, dino_feat, club_optimizer, output):
+    def _train_club_enc(self, dino_feat, club_optimizer, output, scaler):
         # for p in self.club_enc.parameters():
         #     p.requires_grad = True
 
-        club_optimizer.zero_grad()
+        club_optimizer.zero_grad(set_to_none=True)
 
         detach_local_feat = self.local_enc_proj(dino_feat).detach()
         detach_local_feat1, detach_local_feat2 = torch.chunk(detach_local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
@@ -119,18 +119,19 @@ class DINORes(nn.Module):
         loss_enc_club = -self.club_enc.loglikeli(detach_local_feat1, detach_local_feat2)
         output["club-enc-loss"] = loss_enc_club
 
-        loss_enc_club.backward(retain_graph=True)
+        # loss_enc_club.backward(retain_graph=True)
+        scaler.scale(loss_enc_club).backward(retain_graph=True)
         # TODO grad clipping
-        club_optimizer.step()
-
+        # club_optimizer.step()
+        scaler.step(club_optimizer)
+        scaler.update()
         # for p in self.club_enc.parameters():
         #     p.requires_grad = False
 
         return output
 
-    def forward(self, img: torch.Tensor, club_optimizer=None
+    def forward(self, img: torch.Tensor, club_optimizer=None, scaler=None
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
-
         img_aug_1 = img  # (b, 3, h, w)
         img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
 
@@ -144,8 +145,8 @@ class DINORes(nn.Module):
         dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
 
-        if self.training:
-            output = self._train_club_enc(dino_feat, club_optimizer, output)
+        # if self.training:
+        #    output = self._train_club_enc(dino_feat, club_optimizer, output, scaler)
 
         semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
         local_feat = self.local_enc_proj(dino_feat)  # (2b, hidden_d, h, w)

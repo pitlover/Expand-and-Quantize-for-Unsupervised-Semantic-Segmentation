@@ -45,10 +45,10 @@ class ResWrapper(nn.Module):
 
         if self.training:
             if self.contra_pos_weight > 0.0:
-                model_loss += (output["contra-loss-pos"] * self.contra_pos_weight)
+                model_loss = model_loss + (output["contra-loss-pos"] * self.contra_pos_weight)
 
             if self.contra_neg_weight > 0.0:
-                model_loss += (output["contra-loss-neg"] * self.contra_neg_weight)
+                model_loss = model_loss + (output["contra-loss-neg"] * self.contra_neg_weight)
 
         output["loss"] = model_loss
 

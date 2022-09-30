@@ -12,13 +12,14 @@ from model.dino_contra import DINOContra
 from model.dino_stego import DINOStego
 from model.dino_vae import DINOVae
 from model.dino_res import DINORes
+from model.dino_cluster import DINOCluster
 
 from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
 from model.blocks.club_encoder import CLUBEncoder
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
-
+from wrapper.ClusterWrapper import ClusterWrapper
 
 def build_model(cfg: dict,
                 name: str) -> nn.Module:
@@ -27,6 +28,8 @@ def build_model(cfg: dict,
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
     elif "res" in name:
         model = ResWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
+    elif "cluster" in name:
+        model = ClusterWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
     elif "contra" in name:
         model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
     elif "vae" in name:

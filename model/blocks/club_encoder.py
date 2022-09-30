@@ -51,6 +51,8 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
                                   nn.ReLU(),
                                   nn.Linear(hidden_dim // 2, hidden_dim // 2),
                                   nn.ReLU(),
+                                  nn.Linear(hidden_dim // 2, hidden_dim // 2),
+                                  nn.ReLU(),
                                   nn.Linear(hidden_dim // 2, output_dim)
                                   )
 
@@ -60,8 +62,13 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
                                       nn.ReLU(),
                                       nn.Linear(hidden_dim // 2, hidden_dim // 2),
                                       nn.ReLU(),
+                                      nn.Linear(hidden_dim // 2, hidden_dim // 2),
+                                      nn.ReLU(),
+                                      nn.Linear(hidden_dim // 2, hidden_dim // 2),
+                                      nn.ReLU(),
                                       nn.Linear(hidden_dim // 2, output_dim),
-                                      nn.Tanh())
+                                      # nn.Tanh()
+                                      )
         # self.apply(weights_init)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "RES_baseline_reconX_pos1.0_distance5"
+  name: "CLUSTER_baseline_reconX_pos1.0_distance5"
   notes: ""
 
 # ---------------------------------------------------------------- #

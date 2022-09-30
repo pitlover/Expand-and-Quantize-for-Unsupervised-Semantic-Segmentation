@@ -6,6 +6,26 @@ import random
 from model.blocks.club_encoder import CLUBEncoder
 
 
+def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
+    '''
+
+    :param x: flat_x => (bhw, d)
+    :param b: batch_size
+    :return:
+    '''
+    split_x = torch.chunk(x, chunks=b * 28, dim=0)  # (bhw/b, d)
+    rand_neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)
+
+    for iter in range(b * 28):
+        distance_ = torch.cdist(split_x[iter], x)
+        negative_index = torch.topk(distance_, num_neg, dim=-1)  # (bhw/b, n)
+        rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
+        rand_neg[iter * 28: (iter + 1) * 28] = rand_neg_
+    del split_x, distance_, negative_index, rand_neg_
+
+    return rand_neg
+
+
 class InfoNCELoss(nn.Module):
     def __init__(self,
                  normalize: str = "l2",
@@ -56,45 +76,6 @@ class InfoNCELoss(nn.Module):
 
         return rand_neg
 
-    def distance(self, x, b) -> torch.Tensor:
-        '''
-
-        :param x: flat_x => (bhw, d)
-        :param b: batch_size
-        :return:
-        '''
-        split_x = torch.chunk(x, chunks=b * 28, dim=0)  # (bhw/b, d)
-        rand_neg = torch.zeros(x.shape[0], self.num_neg, x.shape[1], device=x.device)
-
-        for iter in range(b * 28):
-            distance_ = torch.cdist(split_x[iter], x)
-            negative_index = torch.topk(distance_, self.num_neg, dim=-1)  # (bhw/b, n)
-            rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
-            # if iter == 0:
-            #     rand_neg = rand_neg_
-            # else:
-            # rand_neg = torch.cat([rand_neg, rand_neg_], dim=0)
-            rand_neg[iter * 28: (iter + 1) * 28] = rand_neg_
-        del split_x, distance_, negative_index, rand_neg_
-
-        # for iter in range(b):
-        #     similarity_ = torch.matmul(split_x[iter], x.T)  # (bhw/b, d) * (d, bhw) -> (bhw/b, bhw)
-        #     self_mask_ = torch.where(torch.eye(split_x[iter].shape[0], x.shape[0], device=x.device) == 0, 1,
-        #                              10 ** 8)  # TODO check overflow
-        #     similarity_ = similarity_ * self_mask_
-        #     negative_index = torch.topk(similarity_, self.num_neg, largest=False, dim=-1)  # (bhw/b, n)
-        #     print(similarity_)
-        #     print(negative_index.values)
-        #     exit()
-        #     rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
-        #     if iter == 0:
-        #         rand_neg = rand_neg_
-        #     else:
-        #         rand_neg = torch.cat([rand_neg, rand_neg_], dim=0)
-        # del split_x, similarity_, self_mask_, negative_index, rand_neg_
-
-        return rand_neg
-
     def paired_similarity(self, x, neg):
         x = x.unsqueeze(1)
         neg_similarity = torch.matmul(x, neg.transpose(-2, -1))  # (bhw, 1, d) * (bhw, d, k) -> (bhw, 1, k)
@@ -121,7 +102,7 @@ class InfoNCELoss(nn.Module):
         if self.cal_type == "random":
             neg = self.random(flat_x1)
         elif self.cal_type == "distance":
-            neg = self.distance(flat_x1, b)
+            neg = distance(flat_x1, b, self.num_neg)
         elif self.cal_type == "point":
             raise ValueError(f"Not implemented yet {self.cal_typel}")
         else:
@@ -152,8 +133,10 @@ class InfoNCELoss(nn.Module):
 
 class CLUBLoss(nn.Module):
     def __init__(self,
+                 neg_sample: int = 100,
                  reduction: str = "mean"):
         super().__init__()
+        self.num_neg = neg_sample
 
         self.reduction = reduction
 
@@ -177,6 +160,8 @@ class CLUBLoss(nn.Module):
         split_p_logvar = torch.chunk(p_logvar, chunks=h, dim=0)  # split tensor for code optimization
         split_positive = torch.chunk(positive, chunks=h, dim=0)
 
+        # neg = distance(flat_x, b, self.num_neg)  # (bhw, num_neg, d)
+
         # negative = -0.5 * torch.mean(
         #     torch.sum(
         #         torch.square(flat_x.unsqueeze(0) - p_mu.unsqueeze(1)) /
@@ -191,9 +176,10 @@ class CLUBLoss(nn.Module):
         #
         # return loss
         loss = torch.tensor(0., device=x.device)
+
         for iter in range(h):
-            p_mu_ = split_p_mu[iter]
-            p_logvar_ = split_p_logvar[iter]
+            p_mu_ = split_p_mu[iter]  # (bhw/h, d)
+            p_logvar_ = split_p_logvar[iter]  # (bhw/h, d)
 
             negative = -0.5 * torch.mean(
                 torch.sum(
@@ -206,7 +192,6 @@ class CLUBLoss(nn.Module):
             loss_ = torch.mean(split_positive[iter] - negative)  # bhw/28
             loss += loss_
             del loss_, negative, p_mu_, p_logvar_
-
         loss = loss / (h)
 
         del positive
@@ -259,6 +244,56 @@ class CLUBLoss(nn.Module):
         #     loss = torch.mean(loss)
         #
         # return loss
+
+
+class MINE(nn.Module):
+    def __init__(self, x_dim, y_dim, hidden_size):
+        super(MINE, self).__init__()
+        self.T_func = nn.Sequential(nn.Linear(x_dim + y_dim, hidden_size),
+                                    nn.ReLU(),
+                                    nn.Linear(hidden_size, 1))
+
+    def forward(self, x_samples, y_samples):  # samples have shape [sample_size, dim]
+        # shuffle and concatenate
+        sample_size = y_samples.shape[0]
+        random_index = torch.randint(sample_size, (sample_size,)).long()
+
+        y_shuffle = y_samples[random_index]
+
+        T0 = self.T_func(torch.cat([x_samples, y_samples], dim=-1))
+        T1 = self.T_func(torch.cat([x_samples, y_shuffle], dim=-1))
+
+        lower_bound = T0.mean() - torch.log(T1.exp().mean())
+
+        # compute the negative loss (maximise loss == minimise -loss)
+        return - lower_bound
+
+    def learning_loss(self, x_samples, y_samples):
+        return -self.forward(x_samples, y_samples)
+
+
+class NWJ(nn.Module):
+    def __init__(self, x_dim, y_dim, hidden_size):
+        super(NWJ, self).__init__()
+        self.F_func = nn.Sequential(nn.Linear(x_dim + y_dim, hidden_size),
+                                    nn.ReLU(),
+                                    nn.Linear(hidden_size, 1))
+
+    def forward(self, x_samples, y_samples):
+        # shuffle and concatenate
+        sample_size = y_samples.shape[0]
+
+        x_tile = x_samples.unsqueeze(0).repeat((sample_size, 1, 1))
+        y_tile = y_samples.unsqueeze(1).repeat((1, sample_size, 1))
+
+        T0 = self.F_func(torch.cat([x_samples, y_samples], dim=-1))
+        T1 = self.F_func(torch.cat([x_tile, y_tile], dim=-1)) - 1.  # shape [sample_size, sample_size, 1]
+
+        lower_bound = T0.mean() - (T1.logsumexp(dim=1) - np.log(sample_size)).exp().mean()
+        return lower_bound
+
+    def learning_loss(self, x_samples, y_samples):
+        return -self.forward(x_samples, y_samples)
 
 
 class JSDLoss(nn.Module):

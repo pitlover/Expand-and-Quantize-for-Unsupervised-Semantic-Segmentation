@@ -139,7 +139,6 @@ class DecResBlock(nn.Module):
         x = x + identity
         return x
 
-
 class ResBlock(nn.Module):
     def __init__(self, in_channel, channel):
         super().__init__()

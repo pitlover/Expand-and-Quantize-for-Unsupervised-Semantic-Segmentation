@@ -69,7 +69,8 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
                                       nn.Linear(hidden_dim // 2, output_dim),
                                       # nn.Tanh()
                                       )
-        # self.apply(weights_init)
+        self.p_residual = nn.Sequential(nn.Linear(input_dim, output_dim))
+        self.apply(weights_init)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         '''
@@ -81,9 +82,11 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
         b, d, h, w = x.shape
         x = x.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
         flat_x1 = x.view(-1, d)  # (bhw, d)
+        identity = flat_x1
         mu = self.p_mu(flat_x1)
         logvar = self.p_logvar(flat_x1)
-
+        residual_identity = self.p_residual(identity)
+        logvar = logvar + residual_identity
         return mu, logvar
 
     def get_mu_logvar(self, flat_x):
@@ -102,7 +105,7 @@ class CLUBEncoder(nn.Module):  # CLUB: Mutual Information Contrastive Learning U
 
         mu, logvar = self.get_mu_logvar(flat_x)
         # TODO check loglikeli weight
-        return 0.5 * (-torch.square(mu - flat_y) / logvar.exp() - logvar).sum(dim=1).mean(dim=0)
+        return 0.01 * (-torch.square(mu - flat_y) / logvar.exp() - logvar).sum(dim=1).mean(dim=0)
 
 
 def Gaussian_log_likelihood(

@@ -6,8 +6,7 @@ import torch.nn.functional as F  # noqa
 import torchvision.transforms as transforms
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
-from model.loss import InfoNCELoss, CLUBLoss
-from model.blocks.club_encoder import CLUBEncoder, Gaussian_log_likelihood
+from model.loss import InfoNCELoss
 from torch.nn.utils.clip_grad import clip_grad_norm_
 
 
@@ -16,7 +15,6 @@ class DINOCluster(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.cfg_loss = cfg_loss
-        self.mi_iter = cfg_loss["club"]["mi_iter"]
 
         self.extractor = DinoFeaturizer(cfg["pretrained"])
         self.feat_dim = self.extractor.n_feats  # 384
@@ -31,41 +29,12 @@ class DINOCluster(nn.Module):
             semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.semantic_dim, self.semantic_dim))
         self.semantic_enc_proj = nn.Sequential(*semantic_enc_proj)
 
-        # -------- local-encoder -------- #
-        # local_enc_proj = []
-        # for i in range(num_enc_blocks):
-        #     local_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.local_dim, self.local_dim))
-        # self.local_enc_proj = nn.Sequential(*local_enc_proj)
-
-        # -------- decoder -------- #
-        # self.agg_type = cfg["agg_type"]
-        # if (self.agg_type == "cat") or (self.agg_type == "concat"):
-        #     self.agg_type = "concat"
-        #     self.aggregate_proj = nn.Conv2d(self.semantic_dim + self.local_dim, self.hidden_dim, 1, 1, 0)
-        # else:
-        #     raise ValueError(f"Unsupported aggregate type {self.agg_type}.")
-        #
-        # num_dec_blocks = cfg["dec_num_blocks"]
-        # dec_proj = []
-        # for i in range(num_dec_blocks):
-        #     dec_proj.append(
-        #         DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
-        # self.dec_proj = nn.Sequential(*dec_proj)
-        #
-        # last_norm = cfg.get("last_norm", False)
-        # self.dec_norm = LayerNorm2d(self.feat_dim) if last_norm else None
-
         # -------- loss -------- #
         self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
                                         neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
                                         temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
                                         cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
                                         )
-        # self.club_enc = CLUBEncoder(input_dim=self.local_dim,
-        #                             output_dim=self.local_dim,
-        #                             hidden_dim=self.hidden_dim
-        #                             )
-        # self.club_loss = CLUBLoss(neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0), reduction="mean")
 
     def _photometric_aug(self, x: torch.Tensor):
         # b, 3, h, w = x.shape
@@ -103,45 +72,6 @@ class DINOCluster(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def _train_club_enc(self,
-                        dino_feat: torch.Tensor,
-                        club_optimizer,
-                        output: Dict,
-                        scaler: torch.cuda.amp.GradScaler,
-                        iter: int):
-        # for p in self.club_enc.parameters():
-        #     p.requires_grad = True
-
-        club_optimizer.zero_grad(set_to_none=True)
-
-        detach_local_feat = self.local_enc_proj(dino_feat).detach()
-        detach_local_feat1, detach_local_feat2 = torch.chunk(detach_local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
-
-        # p_mu, p_logvar = self.club_enc(detach_local_feat1)
-        # loss_enc_club = -Gaussian_log_likelihood(
-        #    detach_local_feat2, p_mu, p_logvar,
-        #    reduction="mean"
-        # ) # TODO Gaussian vs loglikeli
-
-        loss_enc_club = -self.club_enc.loglikeli(detach_local_feat1, detach_local_feat2)
-        output["club-enc-loss"] = loss_enc_club
-
-        # TODO check gradient clipping
-        # loss_enc_club.backward(retain_graph=True)
-        scaler.scale(loss_enc_club).backward(retain_graph=True)
-
-        scaler.unscale_(club_optimizer)
-        grad_norm = clip_grad_norm_(self.club_enc.parameters(), max_norm=self.cfg_loss["club"]["clip_grad"])
-        output["club-grad"] = grad_norm
-        scaler.step(club_optimizer)
-        scaler.update()
-
-        # club_optimizer.step()
-        # for p in self.club_enc.parameters():
-        #     p.requires_grad = False
-
-        return output, club_optimizer
-
     def forward(self, img: torch.Tensor, club_optimizer=None, scaler=None
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         img_aug_1 = img  # (b, 3, h, w)
@@ -157,50 +87,10 @@ class DINOCluster(nn.Module):
         dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
 
-        if self.training and self.cfg_loss["club_weight"] > 0.0:
-            for iter in range(self.mi_iter):
-                output, club_optimizer = self._train_club_enc(dino_feat, club_optimizer, output, scaler, iter)
-
         semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
 
-        ##
         semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
         if self.training:
             output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+
         return dino_feat, semantic_feat_img1, output
-        ##
-        # local_feat = self.local_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
-        #
-        # if self.agg_type == "concat":
-        #     feat = torch.cat([semantic_feat, local_feat], dim=1)
-        # elif self.agg_type == "add":
-        #     feat = semantic_feat + local_feat
-        # else:
-        #     raise ValueError
-        #
-        # feat = self.aggregate_proj(feat)  # (2b, hidden_d + hidden_d, h, w) -> (2b, hidden_d, h, w)
-        # recon = self.dec_proj(feat)  # (2b, hidden_d, h, w) -> (2b, d, h, w)
-        #
-        # if self.dec_norm is not None:
-        #     recon = self.dec_norm(recon)
-        #
-        # recon_loss = F.mse_loss(recon, dino_feat)
-        #
-        # output["recon-loss"] = recon_loss
-        #
-        # # split half
-        # dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]  # (b, d, h, w)
-        # semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
-        #
-        # if self.training:
-        #     local_feat_img1, local_feat_img2 = torch.chunk(local_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
-        #
-        #     # contrastive loss -> re - transform geometric transforms
-        #     output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
-        #
-        #     if self.cfg_loss["club_weight"] > 0.0:
-        #         p_mu, p_logvar = self.club_enc(local_feat_img1)
-        #         output["contra-loss-neg"] = self.club_loss(local_feat_img2, p_mu, p_logvar)
-        #
-        # return dino_feat, semantic_feat_img1, output
-        # # return dino_feat, semantic_feat, output

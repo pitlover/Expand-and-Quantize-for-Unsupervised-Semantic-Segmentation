@@ -29,7 +29,7 @@ def build_model(cfg: dict,
     elif "res" in name:
         model = ResWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
     elif "cluster" in name:
-        model = ClusterWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
+        model = ClusterWrapper(cfg, DINOCluster(cfg["model"], cfg["loss"]))
     elif "contra" in name:
         model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
     elif "vae" in name:

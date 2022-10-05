@@ -23,9 +23,7 @@ class ClusterWrapper(nn.Module):
         self.num_classes = cfg["num_classes"]
         self.extra_classes = cfg["eval"]["extra_classes"]
 
-        self.recon_weight = cfg["loss"]["recon_weight"]
         self.contra_pos_weight = cfg["loss"].get("info_nce_weight", 0.0)
-        self.contra_neg_weight = cfg["loss"].get("club_weight", 0.0)
 
         self.output_dim = cfg["model"]["hidden_dim"]
 
@@ -42,14 +40,11 @@ class ClusterWrapper(nn.Module):
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
         dino_feat, semantic_feat, output = self.model(img, club_optimizer, scaler)
 
-        model_loss = output["recon-loss"] * self.recon_weight
+        model_loss = 0
 
         if self.training:
             if self.contra_pos_weight > 0.0:
                 model_loss = model_loss + (output["contra-loss-pos"] * self.contra_pos_weight)
-
-            if self.contra_neg_weight > 0.0:
-                model_loss = model_loss + (output["contra-loss-neg"] * self.contra_neg_weight)
 
         output["loss"] = model_loss
 

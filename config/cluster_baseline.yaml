@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_baseline_reconX_pos1.0_distance5"
+  name: "CLUSTER_baseline_reconX_pos1.0_distance100"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -33,18 +33,13 @@ model:
 
 # ---------------------------------------------------------------- #
 loss:
-  recon_weight: 0.0
-  info_nce_weight: 0.1
-  club_weight: 0.0
+  info_nce_weight: 1.0
 
   info_nce:
-    neg_sample: 5
+    neg_sample: 100
     temperature: 1.0
     normalize: "l2"
     cal_type: "distance" # "random", "point", "distance"
-  club:
-    mi_iter : 10
-    clip_grad : 5
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -75,10 +70,6 @@ optimizer:
     name: "adamw"
     lr: 1.0e-5
     weight_decay: 1.0e-4
-  club_enc:
-    name: "adam"
-    lr: 3.0e-6
-    weight_decay: 0.0
   cluster:
     name: "adam"
     lr: 3.0e-3

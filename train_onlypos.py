@@ -240,8 +240,8 @@ def valid_epoch(
     valid_time = time.time() - valid_start_time
 
     if is_master():
-        s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-        s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+        s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
+        s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
         for k, v in result.items():
             s += f"... {k}: {v.item() if isinstance(v, torch.Tensor) else v:.6f}\n"
         s += f"... time: {valid_time:.3f} sec"

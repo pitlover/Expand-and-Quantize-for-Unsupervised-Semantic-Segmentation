@@ -21,15 +21,16 @@ from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
 
+
 def build_model(cfg: dict,
                 name: str) -> nn.Module:
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
-    elif "res" in name:
-        model = ResWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
     elif "cluster" in name:
         model = ClusterWrapper(cfg, DINOCluster(cfg["model"], cfg["loss"]))
+    elif "res" in name:
+        model = ResWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
     elif "contra" in name:
         model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
     elif "vae" in name:

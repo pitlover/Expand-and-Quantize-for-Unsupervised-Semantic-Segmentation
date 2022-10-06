@@ -83,13 +83,12 @@ class DINOCluster(nn.Module):
         # img_aug_2 = self._geometric_aug(img_aug_2)  # (b, 3, h, w)
 
         img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
-
         dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
 
         semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
-
         semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
+
         if self.training:
             output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
 

@@ -38,7 +38,7 @@ def train_epoch(
         best_metric: Dict[str, float],
         best_epoch: int,
         best_iter: int,
-        scaler : torch.cuda.amp.GradScaler,
+        scaler: torch.cuda.amp.GradScaler,
 ) -> Tuple[int, Dict[str, float], int, int]:
     # cfg = cfg
     model_m = model.module if isinstance(model, DistributedDataParallel) else model
@@ -74,7 +74,8 @@ def train_epoch(
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
                 total_loss, output, _ = model(img, label,
-                                              club_optimizer, scaler=scaler)  # total_loss, output, (linear_preds, cluster_preds)
+                                              club_optimizer,
+                                              scaler=scaler)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -246,8 +247,8 @@ def valid_epoch(
     valid_time = time.time() - valid_start_time
 
     if is_master():
-        s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-        s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+        s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
+        s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
         for k, v in result.items():
             s += f"... {k}: {v.item() if isinstance(v, torch.Tensor) else v:.6f}\n"
         s += f"... time: {valid_time:.3f} sec"
@@ -297,7 +298,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
     if is_distributed_set():
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = DistributedDataParallel(model, device_ids=[local_rank],
-                                        output_device=device) # , find_unused_parameters=True) # club
+                                        output_device=device)  # , find_unused_parameters=True) # club
         model_m = model.module  # actual model without wrapping
 
     else:

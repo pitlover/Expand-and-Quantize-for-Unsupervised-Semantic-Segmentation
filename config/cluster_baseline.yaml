@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_baseline_pos1.0_cosine100_lr5.7"
+  name: "CLUSTER_pos1.0_cosine100_lr5.7_res320"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -43,10 +43,10 @@ dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    crop_type: null # "five" # , null
+    crop_type: null # "five" # null
     crop_ratio: 0.5
     loader_crop_type: "center"
-    res: 224
+    res: 320
   val:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
@@ -56,7 +56,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
+    batch_size: 32  # total
     num_workers: 8  # total
   val:
     batch_size: 32  # total
@@ -67,7 +67,7 @@ optimizer:
   model:
     name: "adamw"
     lr: 5.0e-7
-    weight_decay: 1.0e-4
+    weight_decay: 1e-4
   cluster:
     name: "adam"
     lr: 3.0e-3
@@ -94,4 +94,4 @@ train:
   print_interval_iters: 25
   valid_interval_iters: 25
   clip_grad: 1.0
-  num_accum: 1
+  num_accum: 2

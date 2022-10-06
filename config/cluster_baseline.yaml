@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_baseline_pos1.0_distance100_lr5.7"
+  name: "CLUSTER_baseline_pos1.0_distance100_lr1.6_5crop"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -43,7 +43,7 @@ dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    crop_type: null # "five" # , null
+    crop_type: five # "five" # , null
     crop_ratio: 0.5
     loader_crop_type: "center"
     res: 224
@@ -66,7 +66,7 @@ dataloader:
 optimizer:
   model:
     name: "adamw"
-    lr: 5.0e-7
+    lr: 1.0e-6
     weight_decay: 1.0e-4
   cluster:
     name: "adam"

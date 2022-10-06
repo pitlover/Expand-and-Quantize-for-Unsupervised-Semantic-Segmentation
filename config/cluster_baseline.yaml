@@ -92,7 +92,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 2
+  max_epochs: 10
   print_interval_iters: 25
   valid_interval_iters: 25
   clip_grad: 1.0

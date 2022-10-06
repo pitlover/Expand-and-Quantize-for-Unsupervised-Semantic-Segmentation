@@ -72,8 +72,9 @@ def train_epoch(
 
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
-            total_loss, output, _ = model(img, label,
-                                          club_optimizer, scaler=scaler)  # total_loss, output, (linear_preds, cluster_preds)
+            with torch.cuda.amp.autocast(enabled=True):
+                total_loss, output, _ = model(img, label,
+                                              club_optimizer, scaler=scaler)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -95,13 +96,15 @@ def train_epoch(
             current_iter += 1
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
-                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                with torch.cuda.amp.autocast(enabled=True):
+                    total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
                 # loss.backward()
                 scaler.scale(loss).backward()
         else:  # non-update step
             # and not DDP
-            total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+            with torch.cuda.amp.autocast(enabled=True):
+                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             # loss.backward()
@@ -219,7 +222,8 @@ def valid_epoch(
         img = data["img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
         # -------------------------------- loss -------------------------------- #
-        _, output, (linear_preds, cluster_preds) = model(img, label, is_crf=is_crf)
+        with torch.cuda.amp.autocast(enabled=True):
+            _, output, (linear_preds, cluster_preds) = model(img, label, is_crf=is_crf)
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 

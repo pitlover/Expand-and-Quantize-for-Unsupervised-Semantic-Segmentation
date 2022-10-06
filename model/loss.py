@@ -2,8 +2,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import random
-from model.blocks.club_encoder import CLUBEncoder
+from torchmetrics.functional import pairwise_cosine_similarity
 
 
 def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
@@ -15,16 +14,16 @@ def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
     '''
     jump = x.shape[0] // b  # hw
     split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
-    rand_neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)
+    neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)
 
     for iter in range(b):
-        distance_ = torch.cdist(split_x[iter], x)
+        distance_ = torch.cdist(split_x[iter], x)  # (bhw/b, bhw)
         negative_index = torch.topk(distance_, num_neg, dim=-1)  # (bhw/b, n)
-        rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
-        rand_neg[iter * jump: (iter + 1) * jump] = rand_neg_
-        del distance_, negative_index, rand_neg_
+        neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
+        neg[iter * jump: (iter + 1) * jump] = neg_
+        del distance_, negative_index, neg_
     del split_x
-    return rand_neg
+    return neg
 
 
 class InfoNCELoss(nn.Module):
@@ -55,16 +54,26 @@ class InfoNCELoss(nn.Module):
 
         return x_norm
 
-    def point(self, x) -> torch.Tensor:  # TODO exclude myself
-        bhw, d = x.shape
-        rand_neg = torch.zeros(bhw, self.num_neg, d, device=x.device)  # (bhw, n, d)
-        indices = torch.randint(bhw, (bhw, self.num_neg), device=x.device)
-        for idx, data in enumerate(indices):
-            rand_neg[idx] = x[data]
+    def cosine(self, x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
+        '''
 
-        del indices
+        :param x: (bhw, d) -> normalized_flat_x
+        :param b: batch_size
+        :param num_neg: number of negative samples
+        :return:
+        '''
+        jump = x.shape[0] // b  # hw
+        split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
+        neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)  # (bhw, n, d)
 
-        return rand_neg
+        for iter in range(b):
+            cos_similarity_ = pairwise_cosine_similarity(split_x[iter], x)  # (bhw/b, bhw) high value -> high same
+            negative_index = torch.topk(cos_similarity_, num_neg, largest=False, dim=-1)  # (bhw/b, n) small similarity
+            neg_ = F.embedding(negative_index.indices, x)  # (bhw/b, n, d)
+            neg[iter * jump: (iter + 1) * jump] = neg_
+            del cos_similarity_, negative_index, neg_
+        del split_x
+        return neg
 
     def random(self, x) -> torch.Tensor:  # TODO exclude myself
         bhw, d = x.shape
@@ -104,8 +113,9 @@ class InfoNCELoss(nn.Module):
             neg = self.random(flat_x1)
         elif self.cal_type == "distance":
             neg = distance(flat_x1, b, self.num_neg)
-        elif self.cal_type == "point":
-            raise ValueError(f"Not implemented yet {self.cal_typel}")
+        elif self.cal_type == "cosine":
+            x1_norm = self._normalize(flat_x1)
+            neg = self.cosine(x1_norm, b, self.num_neg)
         else:
             raise ValueError(f"No support {self.cal_type}")
 

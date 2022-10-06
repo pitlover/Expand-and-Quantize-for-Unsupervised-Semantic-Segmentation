@@ -37,7 +37,7 @@ def train_epoch(
         best_metric: Dict[str, float],
         best_epoch: int,
         best_iter: int,
-        scaler : torch.cuda.amp.GradScaler,
+        scaler: torch.cuda.amp.GradScaler,
 ) -> Tuple[int, Dict[str, float], int, int]:
     # cfg = cfg
     model_m = model.module if isinstance(model, DistributedDataParallel) else model
@@ -71,7 +71,9 @@ def train_epoch(
 
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
-            total_loss, output, _ = model(img, label, scaler=scaler)  # total_loss, output, (linear_preds, cluster_preds)
+            with torch.cuda.amp.autocast(enabled=True):
+                total_loss, output, _ = model(img, label,
+                                              scaler=scaler)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -92,13 +94,15 @@ def train_epoch(
             current_iter += 1
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
-                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                with torch.cuda.amp.autocast(enabled=True):
+                    total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
                 # loss.backward()
                 scaler.scale(loss).backward()
         else:  # non-update step
             # and not DDP
-            total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+            with torch.cuda.amp.autocast(enabled=True):
+                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             # loss.backward()
@@ -212,7 +216,8 @@ def valid_epoch(
         img = data["img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
         # -------------------------------- loss -------------------------------- #
-        _, output, (linear_preds, cluster_preds) = model(img, label, is_crf=is_crf)
+        with torch.cuda.amp.autocast(enabled=True):
+            _, output, (linear_preds, cluster_preds) = model(img, label, is_crf=is_crf)
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 
@@ -393,13 +398,13 @@ def run(cfg: Dict, debug: bool = False) -> None:
     s += "Final evaluation (before CRF)\n"
 
     _, cluster_result, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=False)
-    s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-    s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+    s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
+    s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
     s += time_log()
     s += "Final evaluation (after CRF)\n"
     _, cluster_result, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=True)
-    s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-    s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+    s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
+    s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
 
     final_time = time.time() - final_start_time
     s += f"... time: {final_time:.3f} sec"

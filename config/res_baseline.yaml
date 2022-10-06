@@ -77,7 +77,7 @@ optimizer:
     weight_decay: 1.0e-4
   club_enc:
     name: "adam"
-    lr: 1.0e-7
+    lr: 3.0e-6
     weight_decay: 0.0
   cluster:
     name: "adam"

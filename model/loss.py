@@ -13,16 +13,17 @@ def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
     :param b: batch_size
     :return:
     '''
-    split_x = torch.chunk(x, chunks=b * 28, dim=0)  # (bhw/b, d)
+    jump = x.shape[0] // b  # hw
+    split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
     rand_neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)
 
-    for iter in range(b * 28):
+    for iter in range(b):
         distance_ = torch.cdist(split_x[iter], x)
         negative_index = torch.topk(distance_, num_neg, dim=-1)  # (bhw/b, n)
         rand_neg_ = F.embedding(negative_index.indices, x)  # ( bhw/b, n, d)
-        rand_neg[iter * 28: (iter + 1) * 28] = rand_neg_
-    del split_x, distance_, negative_index, rand_neg_
-
+        rand_neg[iter * jump: (iter + 1) * jump] = rand_neg_
+        del distance_, negative_index, rand_neg_
+    del split_x
     return rand_neg
 
 

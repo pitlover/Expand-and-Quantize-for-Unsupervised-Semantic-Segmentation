@@ -40,12 +40,10 @@ class ClusterWrapper(nn.Module):
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
         dino_feat, semantic_feat, output = self.model(img, club_optimizer, scaler)
 
-        model_loss = 0
+        model_loss = torch.zeros(1, device=img.device)
 
-        if self.training:
-            if self.contra_pos_weight > 0.0:
-                model_loss = model_loss + (output["contra-loss-pos"] * self.contra_pos_weight)
-
+        if self.training and self.contra_pos_weight > 0.0:
+            model_loss = (output["contra-loss-pos"] * self.contra_pos_weight)
         output["loss"] = model_loss
 
         out = semantic_feat.detach()

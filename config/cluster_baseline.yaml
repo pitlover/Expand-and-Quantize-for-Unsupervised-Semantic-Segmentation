@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_baseline_pos1.0_cosine100_lr1.6"
+  name: "CLUSTER_baseline_pos1.0_distance100_lr5.7"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -37,7 +37,7 @@ loss:
     neg_sample: 100
     temperature: 0.1
     normalize: "l2"
-    cal_type: "cosine" # "random", "cosine", "distance"
+    cal_type: "distance" # "random", "cosine", "distance"
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -66,7 +66,7 @@ dataloader:
 optimizer:
   model:
     name: "adamw"
-    lr: 1.0e-6
+    lr: 5.0e-7
     weight_decay: 1.0e-4
   cluster:
     name: "adam"
@@ -79,8 +79,6 @@ optimizer:
 scheduler:
   model:
     name: "cos" # cos, constant
-  club_enc:
-    name: "cos"
   cluster:
     name: "cos"
   linear:

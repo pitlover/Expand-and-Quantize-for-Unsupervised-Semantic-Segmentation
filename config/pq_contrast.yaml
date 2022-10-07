@@ -29,7 +29,7 @@ model:
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
-    num_codebooks: [ 512,  1024 ] # 2048 -> 1024
+    num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
     embed_dims: [ 256,  1024 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
@@ -58,7 +58,7 @@ dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    crop_type: "five"
+    crop_type: "five"    # null # "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
     res: 224

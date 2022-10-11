@@ -40,7 +40,7 @@ class ClusterWrapper(nn.Module):
         model_loss = torch.zeros(1, device=img.device)
 
         if self.training and self.contra_pos_weight > 0.0:
-            dino_feat, semantic_feat, output = self.model(img, stage=1)
+            dino_feat, semantic_feat, output = self.model(img, label=label, stage=1)
             model_loss = (output["contra-loss-pos"] * self.contra_pos_weight)
             output["loss"] = model_loss
 

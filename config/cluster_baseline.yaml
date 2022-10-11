@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_kmeans_cosine100_lr5.7_tp0.7_reset_kmeans128.16"
+  name: "CLUSTER_pos1.0_kmeans_cosine100_lr5.7_tp0.7_kmeans64.16"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -30,8 +30,8 @@ model:
   agg_type: "concat"
   k_means:
     init: "k-means++"
-    n_cluster: 128
-    n_pos: 32
+    n_cluster: 64
+    n_pos: 16
 
 # ---------------------------------------------------------------- #
 loss:

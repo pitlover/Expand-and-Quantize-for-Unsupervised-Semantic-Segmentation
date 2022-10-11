@@ -11,6 +11,8 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 from sklearn.cluster import KMeans
 from sklearn.metrics import pairwise_distances_argmin_min, pairwise_distances
 import numpy as np
+from sklearn.manifold import TSNE
+from matplotlib import pyplot as plt
 
 
 class DINOCluster(nn.Module):
@@ -42,6 +44,7 @@ class DINOCluster(nn.Module):
                                         temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
                                         cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
                                         )
+        self.iteration = 0
 
     def _photometric_aug(self, x: torch.Tensor):
         # b, 3, h, w = x.shape
@@ -79,7 +82,7 @@ class DINOCluster(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def forward(self, img: torch.Tensor, stage: int = 0
+    def forward(self, img: torch.Tensor, label: torch.Tensor = None, stage: int = 0
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         output = dict()
         minimum, total = self.kmeans_n_pos, 0
@@ -93,19 +96,13 @@ class DINOCluster(nn.Module):
             b, d, h, w = before_dino_feat.shape
             before_dino_feat = before_dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
             before_dino_feat = before_dino_feat.view(-1, d)  # (bhw, d)
-            '''
-            T-SNE visualization
-            '''
-            from sklearn.manifold import TSNE
-            tsne_np = TSNE(n_components=2).fit_transform(before_dino_feat)
-            print(tsne_np)
-            exit()
+
             ori_dino_feat, aug_dino_feat = torch.chunk(before_dino_feat, chunks=2, dim=0)
             ori_dino_feat = ori_dino_feat.detach().cpu().numpy()
             aug_dino_feat = aug_dino_feat.detach().cpu().numpy()
 
             clustering = KMeans(init=self.kmeans_init, n_clusters=self.kmeans_n_cluster, random_state=0)
-            clustering.fit(ori_dino_feat)  # ()
+            clustering_np = clustering.fit(ori_dino_feat)  # ()
             centroids = np.array(clustering.cluster_centers_)  # (kmeans_n_cluster, d)
             clusters_labels = clustering.labels_.tolist()
 
@@ -153,6 +150,51 @@ class DINOCluster(nn.Module):
                 output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
             semantic_feat = semantic_feat_img1
             print("MINIMUM :", minimum, "TOTAL :", total)
+
+            '''
+            T-SNE visualization
+            '''
+            if self.iteration % 100 == 0:
+                resize_label = label.unsqueeze(1)
+                resize_label = resize_label.to(torch.float32)
+                max_pool = nn.MaxPool2d(8, stride=8)
+                resize_label = max_pool(resize_label)
+                resize_label = resize_label.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+                resize_label = resize_label.view(-1, 1)  # (bhw, 1)
+                plt.figure(figsize=(10, 10))
+                colors = ['bisque', 'forestgreen', 'slategrey', 'c', 'm', 'y', 'k', 'w', 'orange', 'purple',
+                          'yellow', 'chocolate', 'coral', 'orchid', 'steelblue', 'lawngreen', 'lightsalmon', 'hotpink',
+                          "#476A2A", "#7851B8", "#BD3430", "#4A2D4E", "#875525",
+                          "#A83683", "#4E655E", "#853541", "#3A3120", "#535D8E"]
+
+                tsne_np = TSNE(n_components=2)
+                dino_np = tsne_np.fit_transform(ori_dino_feat)
+
+                plt.figure(figsize=(10, 10))
+                for i in range(len(dino_np)):
+                    if int(resize_label[i][0].item()) == -1:
+                        continue
+                    plt.scatter(dino_np[i][0], dino_np[i][1], color=colors[int(resize_label[i][0].item())])
+
+                plt.savefig(f'./plot/ori/ori_{self.iteration}.png')
+
+                # ------------------------- #
+                cpu_semantic_feat = semantic_feat.detach().cpu().numpy()
+                tsne_np1 = TSNE(n_components=2)
+                semantic_np = tsne_np1.fit_transform(cpu_semantic_feat)
+
+                plt.figure(figsize=(10, 10))
+                plt.scatter(semantic_np[:, 0], semantic_np[:, 1])
+                plt.savefig(f'./plot/semantic/semantic_{self.iteration}.png')
+
+                # ------------------------- #
+                tsne_np2 = TSNE(n_components=2)
+                center_np = tsne_np2.fit_transform(centroids)
+                plt.figure(figsize=(10, 10))
+                plt.scatter(center_np[:, 0], center_np[:, 1])
+                plt.savefig(f'./plot/center/center_{self.iteration}.png')
+
+            self.iteration += 1
             del clustering, clusters_labels, data_within_cluster, data_idx, centroids, center
         else:
             dino_feat = self.extractor(img)  # (2b, d, h, w)

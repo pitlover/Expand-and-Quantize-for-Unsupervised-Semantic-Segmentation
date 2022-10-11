@@ -61,13 +61,9 @@ def train_epoch(
         s += f"Current iter: {it} (epoch {current_epoch}, " \
              f"epoch done: {it / len(train_dataloader) * 100:.2f} %)\n"
         # -------------------------------- data -------------------------------- #
-        # img = data["img"].to(device, non_blocking=True)
-        # label = data["label"].to(device, non_blocking=True)
-        # data_time = time.time() - data_start_time
-        img = data["img"]
-        label = data["label"]
+        img = data["img"].to(device, non_blocking=True)
+        label = data["label"].to(device, non_blocking=True)
         data_time = time.time() - data_start_time
-
         # -------------------------------- loss -------------------------------- #
         if it % num_accum == 0:
             for optim in optimizers:
@@ -76,8 +72,7 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, label,
-                                              scaler=scaler)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum

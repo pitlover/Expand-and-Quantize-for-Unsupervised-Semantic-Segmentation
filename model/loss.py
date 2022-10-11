@@ -54,7 +54,7 @@ class InfoNCELoss(nn.Module):
 
         return x_norm
 
-    def cosine(self, x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
+    def cosine(self, x: torch.Tensor, num_neg: int) -> torch.Tensor:
         '''
 
         :param x: (bhw, d) -> normalized_flat_x
@@ -62,17 +62,21 @@ class InfoNCELoss(nn.Module):
         :param num_neg: number of negative samples
         :return:
         '''
-        jump = x.shape[0] // b  # hw
-        split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
-        neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)  # (bhw, n, d)
-
-        for iter in range(b):
-            cos_similarity_ = pairwise_cosine_similarity(split_x[iter], x)  # (bhw/b, bhw) high value -> high same
-            negative_index = torch.topk(cos_similarity_, num_neg, largest=False, dim=-1)  # (bhw/b, n) small similarity
-            neg_ = F.embedding(negative_index.indices, x)  # (bhw/b, n, d)
-            neg[iter * jump: (iter + 1) * jump] = neg_
-            del cos_similarity_, negative_index, neg_
-        del split_x
+        # jump = x.shape[0] // b  # hw
+        # split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
+        # neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)  # (bhw, n, d)
+        #
+        # for iter in range(b):
+        #     cos_similarity_ = pairwise_cosine_similarity(split_x[iter], x)  # (bhw/b, bhw) high value -> high same
+        #     negative_index = torch.topk(cos_similarity_, num_neg, largest=False, dim=-1)  # (bhw/b, n) small similarity
+        #     neg_ = F.embedding(negative_index.indices, x)  # (bhw/b, n, d)
+        #     neg[iter * jump: (iter + 1) * jump] = neg_
+        #     del cos_similarity_, negative_index, neg_
+        # del split_x
+        cos_similarity = pairwise_cosine_similarity(x)
+        negative_index = torch.topk(cos_similarity, num_neg, largest=False, dim=-1)  # (bhw/b, n) small similarity
+        neg = F.embedding(negative_index.indices, x)
+        del cos_similarity
         return neg
 
     def random(self, x) -> torch.Tensor:  # TODO exclude myself
@@ -102,12 +106,14 @@ class InfoNCELoss(nn.Module):
 
         :return:
         """
-        b, d, h, w = x1.shape
-        x1 = x1.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
-        flat_x1 = x1.view(-1, d)  # (bhw, d)
-
-        x2 = x2.permute(0, 2, 3, 1).contiguous()
-        flat_x2 = x2.view(-1, d)
+        # b, d, h, w = x1.shape
+        # x1 = x1.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        # flat_x1 = x1.view(-1, d)  # (bhw, d)
+        #
+        # x2 = x2.permute(0, 2, 3, 1).contiguous()
+        # flat_x2 = x2.view(-1, d)
+        flat_x1 = x1
+        flat_x2 = x2
 
         if self.cal_type == "random":
             neg = self.random(flat_x1)
@@ -115,7 +121,7 @@ class InfoNCELoss(nn.Module):
             neg = distance(flat_x1, b, self.num_neg)
         elif self.cal_type == "cosine":
             x1_norm = self._normalize(flat_x1)
-            neg = self.cosine(x1_norm, b, self.num_neg)
+            neg = self.cosine(x1_norm, self.num_neg)
         else:
             raise ValueError(f"No support {self.cal_type}")
 

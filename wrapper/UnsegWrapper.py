@@ -51,7 +51,7 @@ class DINOUnSegWrapper(nn.Module):
                 label: torch.Tensor,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
-        feat, feat_vqs, output = self.model(img)
+        feat, feat_vqs, output = self.model(img, for_train=True)
         # feat: (b, 384, 28, 28)
         # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
         # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
@@ -68,6 +68,9 @@ class DINOUnSegWrapper(nn.Module):
             model_loss = model_loss + (output[f"vq{i}-loss"] * self.vq_weight)
 
         output["loss"] = model_loss
+
+        with torch.no_grad():
+            feat, feat_vqs, output = self.model(img)
 
         if self.output_type == "feat":
             out = feat.detach()

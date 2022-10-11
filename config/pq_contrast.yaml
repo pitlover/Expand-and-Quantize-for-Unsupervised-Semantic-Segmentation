@@ -43,7 +43,10 @@ model:
     num_pq: [ 4, 16]
     agg_type: "concat"  # add, concat
     need_initialized : "kmeans" # rand, kmeans, none
-
+  k_means:
+    init: "k-means++"
+    n_cluster: 25
+    n_pos : 32
 
 # ---------------------------------------------------------------- #
 loss:
@@ -71,7 +74,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
+    batch_size: 8  # total
     num_workers: 8  # total
   val:
     batch_size: 32  # total

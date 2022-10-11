@@ -8,6 +8,9 @@ from model.dino.dino_featurizer import DinoFeaturizer
 from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import InfoNCELoss
 from torch.nn.utils.clip_grad import clip_grad_norm_
+from sklearn.cluster import KMeans
+from sklearn.metrics import pairwise_distances_argmin_min, pairwise_distances
+import numpy as np
 
 
 class DINOCluster(nn.Module):
@@ -21,6 +24,10 @@ class DINOCluster(nn.Module):
         self.semantic_dim = cfg.get("semantic_dim", self.feat_dim)
         self.local_dim = cfg.get("local_dim", self.feat_dim)
         self.hidden_dim = cfg.get("hidden_dim", self.feat_dim)
+
+        self.kmeans_init = cfg["k_means"]["init"]
+        self.kmeans_n_cluster = cfg["k_means"]["n_cluster"]
+        self.kmeans_n_pos = cfg["k_means"]["n_pos"]
 
         # -------- semantic-encoder -------- #
         num_enc_blocks = cfg["enc_num_blocks"]
@@ -72,24 +79,88 @@ class DINOCluster(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def forward(self, img: torch.Tensor, club_optimizer=None, scaler=None
+    def forward(self, img: torch.Tensor, stage: int = 0
                 ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
-        img_aug_1 = img  # (b, 3, h, w)
-        img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
-
-        # TODO contrast geometric
-        # seed = random.randint(0, 2147483647)
-        # self._set_seed(seed)
-        # img_aug_2 = self._geometric_aug(img_aug_2)  # (b, 3, h, w)
-
-        img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
-        dino_feat = self.extractor(img)  # (2b, 384, 28, 28) (2b, d, h/8, w/8)
         output = dict()
+        minimum, total = self.kmeans_n_pos, 0
+        if stage == 1:
+            # photometric aug
+            img_aug_1 = img
+            img_aug_2 = self._photometric_aug(img)
+            img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
 
-        semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
-        semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
+            before_dino_feat = self.extractor(img)  # (2b, d, h, w)
+            b, d, h, w = before_dino_feat.shape
+            before_dino_feat = before_dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+            before_dino_feat = before_dino_feat.view(-1, d)  # (bhw, d)
+            '''
+            T-SNE visualization
+            '''
+            from sklearn.manifold import TSNE
+            tsne_np = TSNE(n_components=2).fit_transform(before_dino_feat)
+            print(tsne_np)
+            exit()
+            ori_dino_feat, aug_dino_feat = torch.chunk(before_dino_feat, chunks=2, dim=0)
+            ori_dino_feat = ori_dino_feat.detach().cpu().numpy()
+            aug_dino_feat = aug_dino_feat.detach().cpu().numpy()
 
-        if self.training:
-            output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+            clustering = KMeans(init=self.kmeans_init, n_clusters=self.kmeans_n_cluster, random_state=0)
+            clustering.fit(ori_dino_feat)  # ()
+            centroids = np.array(clustering.cluster_centers_)  # (kmeans_n_cluster, d)
+            clusters_labels = clustering.labels_.tolist()
 
-        return dino_feat, semantic_feat_img1, output
+            for i in range(self.kmeans_n_cluster):
+                center = centroids[i].reshape(1, -1)  # (1, d)
+                data_within_cluster = [idx for idx, clu_num in enumerate(clusters_labels) if clu_num == i]
+                if len(data_within_cluster) < self.kmeans_n_pos:
+                    current_n_pos = len(data_within_cluster)
+                    if current_n_pos < minimum:
+                        minimum = current_n_pos
+                else:
+                    current_n_pos = self.kmeans_n_pos
+                total += (current_n_pos)
+
+                ori_matrix = np.zeros((len(data_within_cluster), centroids.shape[1]))
+                aug_matrix = np.zeros((len(data_within_cluster), centroids.shape[1]))
+                # one_cluster_tf_matrix = np.zeros((len(data_within_cluster), centroids.shape[1]))
+
+                for row_num, data_idx in enumerate(data_within_cluster):
+                    ori_matrix[row_num] = ori_dino_feat[data_idx]
+                    aug_matrix[row_num] = aug_dino_feat[data_idx]
+
+                center = torch.from_numpy(center).float().to(img.device)
+                ori_matrix = torch.from_numpy(ori_matrix).float().to(img.device)
+                aug_matrix = torch.from_numpy(aug_matrix).float().to(img.device)
+
+                distance_ = torch.cdist(center, ori_matrix)
+                distance_index = torch.topk(distance_, current_n_pos).indices  # (1, n_pos)
+                pos_ori_dino_feat_ = F.embedding(distance_index, ori_matrix).squeeze(0)  # (1, n_pos, d) -> (n_pos, d)
+                pos_aug_dino_feat_ = F.embedding(distance_index, aug_matrix).squeeze(0)
+
+                if i == 0:
+                    pos_ori_feat = pos_ori_dino_feat_
+                    pos_aug_feat = pos_aug_dino_feat_
+                else:
+                    pos_ori_feat = torch.cat([pos_ori_feat, pos_ori_dino_feat_], dim=0)
+                    pos_aug_feat = torch.cat([pos_aug_feat, pos_aug_dino_feat_], dim=0)
+
+            dino_feat = torch.cat([pos_ori_feat, pos_aug_feat], dim=0)
+
+            semantic_feat = self.semantic_enc_proj(dino_feat)  # (2b, hidden_d, h, w)
+            semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
+
+            if self.training:
+                output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+            semantic_feat = semantic_feat_img1
+            print("MINIMUM :", minimum, "TOTAL :", total)
+            del clustering, clusters_labels, data_within_cluster, data_idx, centroids, center
+        else:
+            dino_feat = self.extractor(img)  # (2b, d, h, w)
+            b, d, h, w = dino_feat.shape
+            dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+            dino_feat = dino_feat.view(-1, d)  # (bhw, d)
+
+            semantic_feat = self.semantic_enc_proj(dino_feat)  # (bhw, d)
+            semantic_feat = semantic_feat.reshape(b, h, w, -1)
+            semantic_feat = semantic_feat.permute(0, 3, 1, 2).contiguous()
+        return dino_feat, semantic_feat, output

@@ -387,11 +387,15 @@ class EMAVectorQuantizer(nn.Module):
                         loss = codebook_loss + beta * commitment_loss
                         statistics
         """
-        z = z.permute(0, 2, 3, 1).contiguous()
+        # z = z.permute(0, 2, 3, 1).contiguous()
+        # b, h, w, d = z.shape
+        #
+        # z_flat = z.view(-1, d)  # (bhw, d) = (n, d)
+        print(z.shape)
+        exit()
         b, h, w, d = z.shape
-
-        z_flat = z.view(-1, d)  # (bhw, d) = (n, d)
-        n = b * h * w
+        z_flat = z
+        # n = b * h * w
 
         if self.need_initialized != "none" and self.training:
             if self.need_initialized == "rand":

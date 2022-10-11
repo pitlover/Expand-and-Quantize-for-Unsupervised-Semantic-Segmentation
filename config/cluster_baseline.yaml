@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_cosine100_lr5.7_res320"
+  name: "CLUSTER_pos1.0_kmeans_cosine100_lr5.7_tp0.7_reset_kmeans128.16"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -28,6 +28,10 @@ model:
   hidden_dim: 512
   last_norm: false
   agg_type: "concat"
+  k_means:
+    init: "k-means++"
+    n_cluster: 128
+    n_pos: 32
 
 # ---------------------------------------------------------------- #
 loss:
@@ -35,7 +39,7 @@ loss:
 
   info_nce:
     neg_sample: 100
-    temperature: 0.1
+    temperature: 0.7
     normalize: "l2"
     cal_type: "cosine" # "random", "cosine", "distance"
 # ---------------------------------------------------------------- #

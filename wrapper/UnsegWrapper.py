@@ -51,23 +51,27 @@ class DINOUnSegWrapper(nn.Module):
                 label: torch.Tensor,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
-        feat, feat_vqs, output = self.model(img, for_train=True)
-        # feat: (b, 384, 28, 28)
-        # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
-        # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
+        b, _, H, W = img.shape
+        model_loss = torch.zeros(1, device=img.device)
 
-        model_loss = output["recon-loss"] * self.recon_weight
+        if self.training:  # Filtering for stable training (balancing sample)
+            feat, feat_vqs, output = self.model(img, stage=1)
+            # feat: (b, 384, 28, 28)
+            # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
+            # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
 
-        model_loss += (output["contra-loss-pos"] * self.contra_pos_weight + output[
-            "contra-loss-neg"] * self.contra_neg_weight)
+            model_loss = output["recon-loss"] * self.recon_weight
 
-        if self.stego_weight > 0:
-            model_loss += (output["stego-loss"] * self.stego_weight)
+            model_loss += (output["contra-loss-pos"] * self.contra_pos_weight + output[
+                "contra-loss-neg"] * self.contra_neg_weight)
 
-        for i in range(self.num_vq):
-            model_loss = model_loss + (output[f"vq{i}-loss"] * self.vq_weight)
+            if self.stego_weight > 0:
+                model_loss += (output["stego-loss"] * self.stego_weight)
 
-        output["loss"] = model_loss
+            for i in range(self.num_vq):
+                model_loss = model_loss + (output[f"vq{i}-loss"] * self.vq_weight)
+
+            output["loss"] = model_loss
 
         with torch.no_grad():
             feat, feat_vqs, output = self.model(img)
@@ -76,7 +80,9 @@ class DINOUnSegWrapper(nn.Module):
             out = feat.detach()
         elif "vq" == self.output_type[:2]:
             vq_idx = int(self.output_type[2:])
-            out = feat_vqs[vq_idx].detach()
+            out = feat_vqs[vq_idx].detach()  # (bhw, d)
+            out = out.view(b, H // 8, W // 8, -1).permute(0, 3, 1, 2).contiguous()
+
         else:
             raise ValueError(f"Unsupported output type {self.output_type}.")
 

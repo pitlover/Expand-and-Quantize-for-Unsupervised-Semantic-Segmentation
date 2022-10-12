@@ -7,8 +7,8 @@ import torch.nn.functional as F  # noqa
 
 from model.loss import JSDLoss
 from utils.dist_utils import all_reduce_tensor
-from kmeans_pytorch import kmeans
-
+from sklearn.cluster import KMeans
+import numpy as np
 __all__ = ["VectorQuantizer", "EMAVectorQuantizer", "EmbeddingEMA", "ProductQuantizerWrapper"]
 
 
@@ -391,9 +391,7 @@ class EMAVectorQuantizer(nn.Module):
         # b, h, w, d = z.shape
         #
         # z_flat = z.view(-1, d)  # (bhw, d) = (n, d)
-        print(z.shape)
-        exit()
-        b, h, w, d = z.shape
+        # b, h, w, d = z.shape
         z_flat = z
         # n = b * h * w
 
@@ -404,11 +402,13 @@ class EMAVectorQuantizer(nn.Module):
                 self.restart()
 
             elif self.need_initialized == "kmeans":
-                cluster_ids_x, cluster_centers = kmeans(
-                    X=z_flat, num_clusters=self.num_codebook, distance='euclidean', device=z.device
-                )
-                self.codebook.weight.data.copy_(cluster_centers)
-                self.codebook.weight_avg.data.copy_(cluster_centers)
+                clustering = KMeans(init="k-means++", n_clusters=self.num_codebook, random_state=0)
+                cpu_z_flat = z_flat.detach().cpu().numpy()
+                clustering.fit(cpu_z_flat)
+                centroids = np.array(clustering.cluster_centers_)
+                centroids = torch.from_numpy(centroids).float().to(z.device)
+                self.codebook.weight.data.copy_(centroids)
+                self.codebook.weight_avg.data.copy_(centroids)
 
             self.need_initialized = False
 
@@ -536,9 +536,9 @@ class EMAVectorQuantizer(nn.Module):
 
         # reshape back to match original input shape
         # q = z_quantized.view(b, h, w, d).permute(0, 3, 1, 2).contiguous()
-        q = z_norm_quantized.view(b, h, w, d).permute(0, 3, 1, 2).contiguous()
+        # q = z_norm_quantized.view(b, h, w, d).permute(0, 3, 1, 2).contiguous()
 
-        return q, output, distance_prob
+        return z_norm_quantized, output, distance_prob
 
     def extra_repr(self) -> str:
         return f"embed_dim={self.embed_dim}, " \

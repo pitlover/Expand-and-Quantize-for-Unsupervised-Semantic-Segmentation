@@ -98,11 +98,11 @@ class DINOCluster(nn.Module):
             before_dino_feat = before_dino_feat.view(-1, d)  # (bhw, d)
 
             ori_dino_feat, aug_dino_feat = torch.chunk(before_dino_feat, chunks=2, dim=0)
-            ori_dino_feat = ori_dino_feat.detach().cpu().numpy()
-            aug_dino_feat = aug_dino_feat.detach().cpu().numpy()
+            ori_dino_feat = ori_dino_feat.cpu().numpy()
+            aug_dino_feat = aug_dino_feat.cpu().numpy()
 
             clustering = KMeans(init=self.kmeans_init, n_clusters=self.kmeans_n_cluster, random_state=0)
-            clustering_np = clustering.fit(ori_dino_feat)  # ()
+            clustering.fit(ori_dino_feat)  # ()
             centroids = np.array(clustering.cluster_centers_)  # (kmeans_n_cluster, d)
             clusters_labels = clustering.labels_.tolist()
 

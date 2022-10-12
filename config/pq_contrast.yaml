@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_1:10_kmeans_pq4:16_k512:1024_dim256:1024"
-  notes: "PQ_1024_1024_contrastX_pq(8, 16)_hidden_384"
+  name: "CONTRAST_1:10_filter_kmeans_top1"
+  notes: "PQ_1024_1024_contrastX_pq(8, 16)_hidden_384_top1"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -25,18 +25,18 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 384
+  hidden_dim: 384 # TODO maybe 512?
   last_norm: false
   vq:
     vq_type: "ema"  # ema, param
     num_codebooks: [ 1024,  1024 ] # 2048 -> 1024
-    embed_dims: [ 256,  1024 ]
+    embed_dims: [ 512,  512 ]
     beta: 0.25
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_split: true
     use_gumbel: false
-    use_weighted_sum: false
+    use_weighted_sum: false # default false
     update_norm: true # check default true
     decay: 0.99
     eps: 1.0e-5
@@ -45,8 +45,8 @@ model:
     need_initialized : "kmeans" # rand, kmeans, none
   k_means:
     init: "k-means++"
-    n_cluster: 25
-    n_pos : 32
+    n_cluster: 64
+    n_pos: 32
 
 # ---------------------------------------------------------------- #
 loss:
@@ -74,7 +74,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 8  # total
+    batch_size: 64  # total
     num_workers: 8  # total
   val:
     batch_size: 32  # total

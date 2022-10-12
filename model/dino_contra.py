@@ -11,8 +11,9 @@ from model.quantizer import VectorQuantizer, EMAVectorQuantizer, ProductQuantize
 
 import torchvision.transforms as transforms
 from sklearn.cluster import KMeans
-from sklearn.metrics import pairwise_distances_argmin_min, pairwise_distances
 import numpy as np
+from sklearn.manifold import TSNE
+from matplotlib import pyplot as plt
 
 
 class DINOContra(nn.Module):
@@ -28,6 +29,7 @@ class DINOContra(nn.Module):
         self.kmeans_n_cluster = cfg["k_means"]["n_cluster"]
         self.kmeans_n_pos = cfg["k_means"]["n_pos"]
 
+        self.iteration = 0
         # -------- encoder -------- #
         num_enc_blocks = cfg["enc_num_blocks"]
         enc_proj = []
@@ -133,20 +135,23 @@ class DINOContra(nn.Module):
             x_aug = transforms.GaussianBlur(kernel_size=3)(x_aug)  # texture
         return x_aug
 
-    def forward(self, img: torch.Tensor, for_train : bool = True
+    def forward(self, img: torch.Tensor, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
-        if for_train:
+
+        minimum, total = self.kmeans_n_pos, 0
+        if stage == 1:
             # photometric aug
             img_aug_1 = img
             img_aug_2 = self._photo_aug(img)
             img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
-
             before_dino_feat = self.extractor(img)  # (2b, d, h, w)
+
             b, d, h, w = before_dino_feat.shape
-            before_dino_feat = before_dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+            before_dino_feat = before_dino_feat.permute(0, 2, 3, 1).contiguous()  # (2b, h, w, d)
             before_dino_feat = before_dino_feat.view(-1, d)  # (bhw, d)
 
             ori_dino_feat, aug_dino_feat = torch.chunk(before_dino_feat, chunks=2, dim=0)
+
             ori_dino_feat = ori_dino_feat.cpu().numpy()
             aug_dino_feat = aug_dino_feat.cpu().numpy()
 
@@ -158,8 +163,14 @@ class DINOContra(nn.Module):
             for i in range(self.kmeans_n_cluster):
                 center = centroids[i].reshape(1, -1)  # (d,)
                 data_within_cluster = [idx for idx, clu_num in enumerate(clusters_labels) if clu_num == i]
-                if len(data_within_cluster) <= self.kmeans_n_pos:
-                    self.kmeans_n_pos = len(data_within_cluster)
+                if len(data_within_cluster) < self.kmeans_n_pos:
+                    current_n_pos = len(data_within_cluster)
+                    if current_n_pos < minimum:
+                        minimum = current_n_pos
+                else:
+                    current_n_pos = self.kmeans_n_pos
+                total += (current_n_pos)
+
                 ori_matrix = np.zeros((len(data_within_cluster), centroids.shape[1]))
                 aug_matrix = np.zeros((len(data_within_cluster), centroids.shape[1]))
                 # one_cluster_tf_matrix = np.zeros((len(data_within_cluster), centroids.shape[1]))
@@ -168,10 +179,12 @@ class DINOContra(nn.Module):
                     ori_matrix[row_num] = ori_dino_feat[data_idx]
                     aug_matrix[row_num] = aug_dino_feat[data_idx]
 
-                center = torch.Tensor(center)
-                ori_matrix, aug_matrix = torch.Tensor(ori_matrix), torch.Tensor(aug_matrix)
+                center = torch.from_numpy(center).float().to(img.device)
+                ori_matrix = torch.from_numpy(ori_matrix).float().to(img.device)
+                aug_matrix = torch.from_numpy(aug_matrix).float().to(img.device)
+
                 distance_ = torch.cdist(center, ori_matrix)
-                distance_index = torch.topk(distance_, self.kmeans_n_pos).indices  # (1, n_pos)
+                distance_index = torch.topk(distance_, current_n_pos).indices  # (1, n_pos)
                 pos_ori_dino_feat_ = F.embedding(distance_index, ori_matrix).squeeze(0)  # (1, n_pos, d) -> (n_pos, d)
                 pos_aug_dino_feat_ = F.embedding(distance_index, aug_matrix).squeeze(0)
 
@@ -182,17 +195,23 @@ class DINOContra(nn.Module):
                     pos_ori_feat = torch.cat([pos_ori_feat, pos_ori_dino_feat_], dim=0)
                     pos_aug_feat = torch.cat([pos_aug_feat, pos_aug_dino_feat_], dim=0)
 
-            pos_ori_feat = torch.tensor(pos_ori_feat, device=img.device).clone().detach()
-            pos_aug_feat = torch.tensor(pos_aug_feat, device=img.device).clone().detach()
+            dino_feat = torch.cat([pos_ori_feat, pos_aug_feat], dim=0)  # (2 * k_cluster * n_pos , hidden_dim)
+            print(f"[{self.iteration}] MINIMUM : {minimum}, TOTAL : {total}")
 
-            dino_feat = torch.cat([pos_ori_feat, pos_aug_feat], dim=0)
+            self.iteration += 1
+            del clustering, clusters_labels, data_within_cluster, data_idx, centroids, center
+
         else:
-            dino_feat = self.extractor(img)
+            img_aug_1 = img
+            img_aug_2 = self._photo_aug(img)
+            img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
+            dino_feat = self.extractor(img)  # (2b, d, h, w)
 
-        print(dino_feat.shape)
-        feat = self.enc_proj(dino_feat)  # (2b, 384, 28, 28)
-        print(feat.shape)
-        exit()
+            b, d, h, w = dino_feat.shape
+            dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+            dino_feat = dino_feat.view(-1, d)  # (bhw, d)
+
+        feat = self.enc_proj(dino_feat)
         output = dict()
         feat_vqs = []
 
@@ -202,6 +221,7 @@ class DINOContra(nn.Module):
         for i in range(self.num_vq):
             feat_i = self.vq_input_proj[i](feat)
             feat_vq_i, vq_i_output, dis_prob = self.vq_blocks[i](feat_i)
+
             if i == 0:
                 vq_top_dis_prob = dis_prob
             elif i == self.num_vq - 1:
@@ -217,14 +237,14 @@ class DINOContra(nn.Module):
                 feat = self.vq_output_proj[i](feat_i)
 
         if self.agg_type == "concat":
-            feat = torch.cat(feat_vqs, dim=1)
+            feat = torch.cat(feat_vqs, dim=1)  # (2 * k_cluster * n_pos, hidden + hidden)
         elif self.agg_type == "add":
             feat = sum(feat_vqs)
         else:
             raise ValueError
-        feat = self.vq_aggregate_proj(feat)  # (2b, 384, 28, 28)
+        feat = self.vq_aggregate_proj(feat)  # (2 * k_cluster * n_pos, hidden)
+        recon = self.dec_proj(feat)  # (2 * k_cluster * n_pos, d)
 
-        recon = self.dec_proj(feat)  # (2b, 384, 28, 28)
         recon_loss = F.mse_loss(recon, dino_feat)
 
         output["recon-loss"] = recon_loss
@@ -239,5 +259,18 @@ class DINOContra(nn.Module):
         # split half
         feat = torch.chunk(feat, chunks=2, dim=0)[0]
         feat_vqs = [torch.chunk(vq_i, chunks=2, dim=0)[0] for vq_i in feat_vqs]
+
+        '''
+        T-SNE visualization
+        '''
+        if self.training and self.iteration % 100 == 0:
+            # ------------------------- #
+            cpu_ori_quantized = feat_vqs[0].detach().cpu().numpy()
+            tsne_np1 = TSNE(n_components=2)
+            semantic_np = tsne_np1.fit_transform(cpu_ori_quantized)
+
+            plt.figure(figsize=(10, 10))
+            plt.scatter(semantic_np[:, 0], semantic_np[:, 1])
+            plt.savefig(f'./plot/vq_semantic/vq_semantic_{self.iteration}.png')
 
         return feat, feat_vqs, output

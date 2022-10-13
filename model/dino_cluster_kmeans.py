@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 import torchvision.transforms as transforms
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
+from model.blocks.resnet_linear import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import InfoNCELoss
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from sklearn.cluster import KMeans

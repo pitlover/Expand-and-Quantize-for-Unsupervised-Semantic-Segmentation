@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.blocks.resnet import EncResBlock, DecResBlock
+from model.blocks.resnet_linear import EncResBlock, DecResBlock
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer
 
 

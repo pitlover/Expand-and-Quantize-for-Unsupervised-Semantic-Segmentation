@@ -12,16 +12,16 @@ from model.dino_contra import DINOContra
 from model.dino_stego import DINOStego
 from model.dino_vae import DINOVae
 from model.dino_res import DINORes
-# from model.dino_cluster import DINOCluster
-from model.dino_cluster_bk import DINOCluster
+# from model.dino_cluster_kmeans import DINOCluster
+from model.dino_cluster import DINOCluster
 
 from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
 from model.blocks.club_encoder import CLUBEncoder
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
-# from wrapper.ClusterWrapper import ClusterWrapper
-from wrapper.ClusterWrapper_bk import ClusterWrapper
+from wrapper.ClusterWrapper import ClusterWrapper
+# from wrapper.ClusterWrapper_kmeans import ClusterWrapper
 
 
 def build_model(cfg: dict,

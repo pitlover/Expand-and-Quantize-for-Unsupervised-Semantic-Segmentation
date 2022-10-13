@@ -34,20 +34,20 @@ class ClusterWrapper(nn.Module):
     def forward(self,
                 img: torch.Tensor,
                 label: torch.Tensor,
+                club_optimizer=None,
                 is_crf: bool = False,
+                scaler=None
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+        dino_feat, semantic_feat, output = self.model(img, club_optimizer, scaler)
 
         model_loss = torch.zeros(1, device=img.device)
 
         if self.training and self.contra_pos_weight > 0.0:
-            dino_feat, semantic_feat, output = self.model(img, label=label, stage=1)
             model_loss = (output["contra-loss-pos"] * self.contra_pos_weight)
-            output["loss"] = model_loss
-
-        with torch.no_grad():
-            dino_feat, semantic_feat, output = self.model(img)
+        output["loss"] = model_loss
 
         out = semantic_feat.detach()
+
         linear_loss, linear_preds, cluster_loss, cluster_preds = self.evaluator(
             out, img, label=label, is_crf=is_crf)
         output["linear-loss"] = linear_loss

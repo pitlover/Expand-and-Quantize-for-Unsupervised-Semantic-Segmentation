@@ -12,14 +12,16 @@ from model.dino_contra import DINOContra
 from model.dino_stego import DINOStego
 from model.dino_vae import DINOVae
 from model.dino_res import DINORes
-from model.dino_cluster import DINOCluster
+# from model.dino_cluster import DINOCluster
+from model.dino_cluster_bk import DINOCluster
 
 from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
 from model.blocks.club_encoder import CLUBEncoder
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
-from wrapper.ClusterWrapper import ClusterWrapper
+# from wrapper.ClusterWrapper import ClusterWrapper
+from wrapper.ClusterWrapper_bk import ClusterWrapper
 
 
 def build_model(cfg: dict,
@@ -123,8 +125,7 @@ def build_scheduler(cfg: dict,
     # warmup_cfg = cfg["warmup"]
     # warmup = LinearLR(
     #     optimizer,
-    #     start_factor=warmup_cfg["start_factor"],
-    #     end_factor=1.0,
+    #     start_factor=warmup_cfg["start_factor"], end_factor=1.0,
     #     total_iters=warmup_cfg["epochs"] * iter_per_epoch,
     # )
     # decay_cfg = cfg["decay"]

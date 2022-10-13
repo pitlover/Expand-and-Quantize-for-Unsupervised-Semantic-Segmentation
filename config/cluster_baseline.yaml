@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_kmeans_cosine100_lr5.7_tp0.7_kmeans64.16"
+  name: "CLUSTER_pos1.0_kmeans_cosine100_lr5.7_tp0.7_clslr5.3_lilr5.3"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -74,10 +74,10 @@ optimizer:
     weight_decay: 1e-4
   cluster:
     name: "adam"
-    lr: 3.0e-3
+    lr: 5.0e-3
   linear:
     name: "adam"
-    lr: 3.0e-3
+    lr: 5.0e-3
 
 # ---------------------------------------------------------------- #
 scheduler:

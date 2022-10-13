@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CONTRAST_1:10_filter_kmeans_top1"
+  name: "CONTRAST_1:10_filter_kmeans_top1_128:16"
   notes: "PQ_1024_1024_contrastX_pq(8, 16)_hidden_384_top1"
 
 # ---------------------------------------------------------------- #
@@ -45,8 +45,8 @@ model:
     need_initialized : "kmeans" # rand, kmeans, none
   k_means:
     init: "k-means++"
-    n_cluster: 64
-    n_pos: 32
+    n_cluster: 128
+    n_pos: 16
 
 # ---------------------------------------------------------------- #
 loss:

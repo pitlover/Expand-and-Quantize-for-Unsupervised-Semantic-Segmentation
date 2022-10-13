@@ -106,14 +106,14 @@ class InfoNCELoss(nn.Module):
 
         :return:
         """
-        # b, d, h, w = x1.shape
-        # x1 = x1.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
-        # flat_x1 = x1.view(-1, d)  # (bhw, d)
-        #
-        # x2 = x2.permute(0, 2, 3, 1).contiguous()
-        # flat_x2 = x2.view(-1, d)
-        flat_x1 = x1
-        flat_x2 = x2
+        b, d, h, w = x1.shape
+        x1 = x1.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        flat_x1 = x1.view(-1, d)  # (bhw, d)
+
+        x2 = x2.permute(0, 2, 3, 1).contiguous()
+        flat_x2 = x2.view(-1, d)
+        # flat_x1 = x1
+        # flat_x2 = x2
 
         if self.cal_type == "random":
             neg = self.random(flat_x1)

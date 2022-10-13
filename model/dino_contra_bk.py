@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.blocks.resnet import EncResBlock, DecResBlock, LayerNorm2d
+from model.blocks.resnet_bk import EncResBlock, DecResBlock, LayerNorm2d
 from model.loss import JSDLoss
 from model.quantizer import VectorQuantizer, EMAVectorQuantizer, ProductQuantizerWrapper
 

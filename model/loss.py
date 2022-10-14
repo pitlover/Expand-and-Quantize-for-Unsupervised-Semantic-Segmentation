@@ -152,19 +152,23 @@ class InfoNCELoss(nn.Module):
 class ClusterLoss(nn.Module):
     def __init__(self,
                  temperature: float,
-                 eps: float
+                 eps: float,
+                 world_size: int = 4
                  ):
         super().__init__()
         self.temperature = temperature
-        self.eplison = eps
+        self.epsilon = eps
+        self.world_size = world_size
 
     @torch.no_grad()
-    def distributed_sinkhorn(self, out):
+    def distributed_sinkhorn(self, out):  # TODO study about sinkhorn
+        ''''
+        out : (accum * 2bhw + 2bhw, num_prototypes) -> queue-weight scores + out_prototypes
+        '''
         Q = torch.exp(out / self.epsilon).t()  # Q is K-by-B for consistency with notations from our paper
-        # (2*2bhw, num_prototype)
-        print(Q.shape)
-        exit()
-        B = Q.shape[1] * 4  # number of samples to assign
+        # (accum * 2bhw + 2bhw, num_prototypes) -> (num_prototypes, accum * 2bhw + 2bhw)
+
+        B = Q.shape[1] * self.world_size  # number of samples to assign
         # B = Q.shape[1] * args.world_size  # number of samples to assign
         K = Q.shape[0]  # how many prototypes
 
@@ -185,6 +189,7 @@ class ClusterLoss(nn.Module):
             Q /= B
 
         Q *= B  # the colomns must sum to 1 so that Q is an assignment
+
         return Q.t()
 
     def forward(self, normalized_semantic_feat: torch.Tensor, out_prototypes: torch.Tensor, weight,
@@ -196,26 +201,27 @@ class ClusterLoss(nn.Module):
         :param queue: (2bhw, num_prototypes) maybe same as out_prototypes?
         :return:
         '''
-        with torch.no_grad():
+        with torch.no_grad():  # queue : stoarge of normalized semantic features (accum * 2 * bhw, hidden_dim)
             embedding = normalized_semantic_feat.detach()
             out = out_prototypes.detach()  # (2bhw, num_prototypes)
 
-            bhw = out.shape[0] // 2  # bhw
-            if queue is not None:  # after 1000 iterations
+            bhw = out.shape[0]  # 2bhw
+            if queue is not None:  # after queue_start_iter iterations
                 out = torch.cat((torch.mm(queue, weight.t()),
-                                 out))  # (2bhw, hidden_dim) * (hidden-dim, num_prototypes) ->
-                # (2bhw, num_prototypes) -> (2bhw + 2bhw, num_prototypes)
-                # fill the queue
+                                 out))  # (accum * 2bhw, hidden_dim) * (hidden-dim, num_prototypes) -> (accum * 2bhw, num_prototypes)
+                # (2bhw, num_prototypes) -> ( accum * 2bhw + 2bhw, num_prototypes)
 
+                # fill the queue
                 queue[bhw:] = queue[:-bhw].clone()
                 queue[:bhw] = embedding
-            q = self.distributed_sinkhorn(out)[-bhw:]
+
+            q = self.distributed_sinkhorn(out)[-bhw:]  # (2bhw, num_prototypes)
 
         # cluster assignment prediction
         x = out_prototypes / self.temperature
-        loss = torch.mean(torch.sum(q * F.log_softmax(x, dim=1), dim=1))
+        loss = -0.5 * torch.mean(torch.sum(q * F.log_softmax(x, dim=1), dim=1))
 
-        return loss
+        return loss, queue
 
 
 class CLUBLoss(nn.Module):

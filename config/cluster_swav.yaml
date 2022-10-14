@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_swav_cosine100_tp0.1"
+  name: "CLUSTER_pos1.0_swav1_cosine100_tp0.1"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -36,7 +36,7 @@ model:
 # ---------------------------------------------------------------- #
 loss:
   info_nce_weight: 1.0
-  cluster_weight : 1.0
+  swav_weight : 0.1
   info_nce:
     neg_sample: 100
     temperature: 0.1
@@ -46,8 +46,9 @@ loss:
   cluster :
     num_prototypes : 128 # TODO check
     queue_start_iter : 0 # TODO check
+    queue_stack_iter : 5
     temperature : 0.1
-    eps : 0.01 # TODO check
+    eps : 0.05 # TODO check
 
 # ---------------------------------------------------------------- #
 dataset:

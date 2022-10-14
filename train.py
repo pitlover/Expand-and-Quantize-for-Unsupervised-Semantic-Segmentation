@@ -59,7 +59,7 @@ def train_epoch(
 
     # TODO Queue (prototype) design
     queue = torch.zeros(
-        2 * cfg["dataloader"]["train"]["batch_size"] * (cfg["dataset"]["train"]["res"] // 8) ** 2 // get_world_size(), # TODO check queue size
+        cfg["loss"]["cluster"]["queue_stack_iter"] * 2 * cfg["dataloader"]["train"]["batch_size"] // get_world_size() * (cfg["dataset"]["train"]["res"] // 8) ** 2, # TODO check queue size
         cfg["model"]["hidden_dim"],
         device=device)
 
@@ -295,7 +295,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
     # ======================================================================================== #
     # Model
     # ======================================================================================== #
-    model = build_model(cfg, name=cfg["wandb"]["name"].lower())
+    model = build_model(cfg, name=cfg["wandb"]["name"].lower(), world_size=get_world_size())
     model = model.to(device)
     if is_distributed_set():
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)

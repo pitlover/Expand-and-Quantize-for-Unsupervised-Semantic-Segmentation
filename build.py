@@ -22,16 +22,19 @@ from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
+
+
 # from wrapper.ClusterWrapper_kmeans import ClusterWrapper
 
 
 def build_model(cfg: dict,
-                name: str = None) -> nn.Module:
+                name: str = None,
+                world_size: int = 4) -> nn.Module:
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
     elif "cluster" in name:
-        model = ClusterWrapper(cfg, DINOCluster(cfg["model"], cfg["loss"]))
+        model = ClusterWrapper(cfg, DINOCluster(cfg["model"], cfg["loss"], world_size=world_size))
     elif "res" in name:
         model = ResWrapper(cfg, DINORes(cfg["model"], cfg["loss"]))
     elif "contra" in name:

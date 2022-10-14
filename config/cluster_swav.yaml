@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_swav0.1_cosine100_tp0.1"
+  name: "CLUSTER_pos1.0_swav1.0_cosine100_tp0.1_prototype64_tsne"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -28,27 +28,28 @@ model:
   hidden_dim: 512
   last_norm: false
   agg_type: "concat"
-  k_means:
-    init: "k-means++"
-    n_cluster: 64
-    n_pos: 16
+#  k_means:
+#    init: "k-means++"
+#    n_cluster: 64
+#    n_pos: 16
+  tsne: true # default False
 
 # ---------------------------------------------------------------- #
 loss:
   info_nce_weight: 1.0
-  swav_weight : 0.1
+  swav_weight: 1.0
   info_nce:
     neg_sample: 100
     temperature: 0.1
     normalize: "l2"
     cal_type: "cosine" # "random", "cosine", "distance"
 
-  cluster :
-    num_prototypes : 128 # TODO check
-    queue_start_iter : 0 # TODO check
-    queue_stack_iter : 5
-    temperature : 0.1
-    eps : 0.05 # TODO check
+  cluster:
+    num_prototypes: 64 # TODO check
+    queue_start_iter: 0 # TODO check
+    queue_stack_iter: 5
+    temperature: 0.1
+    eps: 0.05 # TODO check
 
 # ---------------------------------------------------------------- #
 dataset:

@@ -10,6 +10,10 @@ from model.blocks.resnet import EncResBlock
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.loss import InfoNCELoss, ClusterLoss
 
+import numpy as np
+from sklearn.manifold import TSNE
+from matplotlib import pyplot as plt
+
 
 class DINOCluster(nn.Module):
     def __init__(self, cfg: dict, cfg_loss: dict, world_size: int = 4):  # cfg["model"], cfg["loss"]
@@ -30,7 +34,7 @@ class DINOCluster(nn.Module):
             semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.semantic_dim, self.semantic_dim))
         self.semantic_enc_proj = nn.Sequential(*semantic_enc_proj)
 
-        # -------- Prototype -------- #
+        # -------- prototype -------- #
         self.queue = None  # placeholder
         self.queue_first_time = True
         self.num_prototypes = cfg_loss["cluster"]["num_prototypes"]
@@ -44,6 +48,9 @@ class DINOCluster(nn.Module):
         self.cluster_loss = ClusterLoss(temperature=self.cfg_loss["cluster"].get("temperature", 1.0),
                                         eps=self.cfg_loss["cluster"].get("eps", 0.001),
                                         world_size=world_size)
+        # -------- t-sne -------- #
+        self.iteration = 0
+        self.tsne = cfg.get("tsne", False)
 
     def _photometric_aug(self, x: torch.Tensor):
         # b, 3, h, w = x.shape
@@ -121,7 +128,23 @@ class DINOCluster(nn.Module):
                                                        out_prototypes,
                                                        self.prototypes.weight,
                                                        self.queue)
-        if self.training:  # update queue only for trainingl
+        if self.training:  # update queue only for training
             self.queue = queue
+            '''
+            T-SNE visualization
+            '''
+            if self.tsne and self.iteration % 1000 == 0:
+                # ------------------------- #
+                flat_ori_feat = semantic_feat_img1.permute(0, 2, 3, 1).contiguous().view(-1,
+                                                                                         semantic_feat_img1.shape[1])
+                cpu_flat_ori_feat = flat_ori_feat.detach().cpu().numpy()  # (bhw, d)
+                tsne_np1 = TSNE(n_components=2)
+                semantic_np = tsne_np1.fit_transform(cpu_flat_ori_feat)
+
+                plt.figure(figsize=(10, 10))
+                plt.scatter(semantic_np[:, 0], semantic_np[:, 1])
+                plt.savefig(f'./plot/swav_semantic/swav_semantic_{self.iteration}.png')
+
+            self.iteration += 1
 
         return dino_feat, semantic_feat_img1, out_prototypes, output

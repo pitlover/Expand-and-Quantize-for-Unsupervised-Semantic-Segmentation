@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR
@@ -25,7 +26,7 @@ from wrapper.ClusterWrapper import ClusterWrapper
 
 
 def build_model(cfg: dict,
-                name: str) -> nn.Module:
+                name: str = None) -> nn.Module:
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))

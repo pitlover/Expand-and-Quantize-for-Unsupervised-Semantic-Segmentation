@@ -56,7 +56,16 @@ def train_epoch(
     step_time = 0.0
 
     data_start_time = time.time()
+
+    # TODO Queue (prototype) design
+    queue = torch.zeros(
+        2 * cfg["dataloader"]["train"]["batch_size"] * (cfg["dataset"]["train"]["res"] // 8) ** 2 // get_world_size(), # TODO check queue size
+        cfg["model"]["hidden_dim"],
+        device=device)
+
     for it, data in enumerate(train_dataloader):
+        if it < cfg["loss"]["cluster"]["queue_start_iter"]:
+            queue = None
         s = time_log()
         s += f"Current iter: {it} (epoch {current_epoch}, " \
              f"epoch done: {it / len(train_dataloader) * 100:.2f} %)\n"
@@ -72,7 +81,7 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, label, queue)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -94,14 +103,15 @@ def train_epoch(
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
                 with torch.cuda.amp.autocast(enabled=True):
-                    total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                    total_loss, output, _ = model(img, label,
+                                                  queue)  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
                 # loss.backward()
                 scaler.scale(loss).backward()
         else:  # non-update step
             # and not DDP
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, label, queue)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             # loss.backward()

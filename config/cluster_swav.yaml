@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_kmeans_cosine100_lr5.7_tp0.7_clslr5.3_lilr5.3"
+  name: "CLUSTER_pos1.0_swav_cosine100_tp0.1"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -36,12 +36,19 @@ model:
 # ---------------------------------------------------------------- #
 loss:
   info_nce_weight: 1.0
-
+  cluster_weight : 1.0
   info_nce:
     neg_sample: 100
-    temperature: 0.7
+    temperature: 0.1
     normalize: "l2"
     cal_type: "cosine" # "random", "cosine", "distance"
+
+  cluster :
+    num_prototypes : 128 # TODO check
+    queue_start_iter : 0 # TODO check
+    temperature : 0.1
+    eps : 0.01 # TODO check
+
 # ---------------------------------------------------------------- #
 dataset:
   train:

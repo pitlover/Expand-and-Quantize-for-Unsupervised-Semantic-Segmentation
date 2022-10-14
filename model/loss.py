@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics.functional import pairwise_cosine_similarity
+from utils.dist_utils import all_reduce_tensor
 
 
 def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
@@ -144,6 +145,75 @@ class InfoNCELoss(nn.Module):
             loss = torch.mean(loss)
 
         del x1, flat_x1, x2, flat_x2, x1_norm, x2_norm, neg, neg_norm, negative, positive, pos_similarity, neg_similarity
+
+        return loss
+
+
+class ClusterLoss(nn.Module):
+    def __init__(self,
+                 temperature: float,
+                 eps: float
+                 ):
+        super().__init__()
+        self.temperature = temperature
+        self.eplison = eps
+
+    @torch.no_grad()
+    def distributed_sinkhorn(self, out):
+        Q = torch.exp(out / self.epsilon).t()  # Q is K-by-B for consistency with notations from our paper
+        # (2*2bhw, num_prototype)
+        print(Q.shape)
+        exit()
+        B = Q.shape[1] * 4  # number of samples to assign
+        # B = Q.shape[1] * args.world_size  # number of samples to assign
+        K = Q.shape[0]  # how many prototypes
+
+        # make the matrix sums to 1
+        sum_Q = torch.sum(Q)
+        sum_Q = all_reduce_tensor(sum_Q)
+        Q /= sum_Q
+
+        for it in range(3):
+            # normalize each row: total weight per prototype must be 1/K
+            sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
+            sum_of_rows = all_reduce_tensor(sum_of_rows)
+            Q /= sum_of_rows
+            Q /= K
+
+            # normalize each column: total weight per sample must be 1/B
+            Q /= torch.sum(Q, dim=0, keepdim=True)
+            Q /= B
+
+        Q *= B  # the colomns must sum to 1 so that Q is an assignment
+        return Q.t()
+
+    def forward(self, normalized_semantic_feat: torch.Tensor, out_prototypes: torch.Tensor, weight,
+                queue: torch.Tensor):
+        '''
+        :param normalized_semantic_feat: (2bhw, hidden_dim)
+        :param out_prototypes: (2bhw, num_prototypes)
+        :param weight: Linear Classifier weight
+        :param queue: (2bhw, num_prototypes) maybe same as out_prototypes?
+        :return:
+        '''
+        with torch.no_grad():
+            embedding = normalized_semantic_feat.detach()
+            out = out_prototypes.detach()  # (2bhw, num_prototypes)
+
+            bhw = out.shape[0] // 2  # bhw
+            if queue is not None:  # after 1000 iterations
+                out = torch.cat((torch.mm(queue, weight.t()),
+                                 out))  # (2bhw, hidden_dim) * (hidden-dim, num_prototypes) ->
+                # (2bhw, num_prototypes) -> (2bhw + 2bhw, num_prototypes)
+                # fill the queue
+
+                queue[bhw:] = queue[:-bhw].clone()
+                queue[:bhw] = embedding
+            q = self.distributed_sinkhorn(out)[-bhw:]
+
+        # cluster assignment prediction
+        x = out_prototypes / self.temperature
+        loss = torch.mean(torch.sum(q * F.log_softmax(x, dim=1), dim=1))
 
         return loss
 

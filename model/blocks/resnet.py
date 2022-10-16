@@ -30,7 +30,6 @@ class EncResBlock(nn.Module):
         self.norm1 = nn.Identity()
 
         self.act1 = nn.ReLU()
-        # self.act1 = nn.ReLU(inplace=True)
         # self.act1 = nn.LeakyReLU(0.1, inplace=True)  # TODO check
         # self.act1 = nn.Identity()
 
@@ -44,7 +43,6 @@ class EncResBlock(nn.Module):
         self.norm2 = nn.Identity()
 
         self.act2 = nn.ReLU()
-        # self.act2 = nn.ReLU(inplace=True)
         # self.act2 = nn.LeakyReLU(0.1, inplace=True)
 
         self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=True)

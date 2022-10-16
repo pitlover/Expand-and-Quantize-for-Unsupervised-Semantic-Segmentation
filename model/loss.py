@@ -175,20 +175,20 @@ class ClusterLoss(nn.Module):
         # make the matrix sums to 1
         sum_Q = torch.sum(Q)
         sum_Q = all_reduce_tensor(sum_Q)
-        Q /= sum_Q
+        Q = Q / sum_Q
 
         for it in range(3):
             # normalize each row: total weight per prototype must be 1/K
             sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
             sum_of_rows = all_reduce_tensor(sum_of_rows)
-            Q /= sum_of_rows
-            Q /= K
+            Q = Q / sum_of_rows
+            Q = Q / K
 
             # normalize each column: total weight per sample must be 1/B
-            Q /= torch.sum(Q, dim=0, keepdim=True)
-            Q /= B
+            Q = Q / torch.sum(Q, dim=0, keepdim=True)
+            Q = Q / B
 
-        Q *= B  # the colomns must sum to 1 so that Q is an assignment
+        Q = Q * B  # the colomns must sum to 1 so that Q is an assignment
 
         return Q.t()
 
@@ -337,56 +337,6 @@ class CLUBLoss(nn.Module):
         #     loss = torch.mean(loss)
         #
         # return loss
-
-
-class MINE(nn.Module):
-    def __init__(self, x_dim, y_dim, hidden_size):
-        super(MINE, self).__init__()
-        self.T_func = nn.Sequential(nn.Linear(x_dim + y_dim, hidden_size),
-                                    nn.ReLU(),
-                                    nn.Linear(hidden_size, 1))
-
-    def forward(self, x_samples, y_samples):  # samples have shape [sample_size, dim]
-        # shuffle and concatenate
-        sample_size = y_samples.shape[0]
-        random_index = torch.randint(sample_size, (sample_size,)).long()
-
-        y_shuffle = y_samples[random_index]
-
-        T0 = self.T_func(torch.cat([x_samples, y_samples], dim=-1))
-        T1 = self.T_func(torch.cat([x_samples, y_shuffle], dim=-1))
-
-        lower_bound = T0.mean() - torch.log(T1.exp().mean())
-
-        # compute the negative loss (maximise loss == minimise -loss)
-        return - lower_bound
-
-    def learning_loss(self, x_samples, y_samples):
-        return -self.forward(x_samples, y_samples)
-
-
-class NWJ(nn.Module):
-    def __init__(self, x_dim, y_dim, hidden_size):
-        super(NWJ, self).__init__()
-        self.F_func = nn.Sequential(nn.Linear(x_dim + y_dim, hidden_size),
-                                    nn.ReLU(),
-                                    nn.Linear(hidden_size, 1))
-
-    def forward(self, x_samples, y_samples):
-        # shuffle and concatenate
-        sample_size = y_samples.shape[0]
-
-        x_tile = x_samples.unsqueeze(0).repeat((sample_size, 1, 1))
-        y_tile = y_samples.unsqueeze(1).repeat((1, sample_size, 1))
-
-        T0 = self.F_func(torch.cat([x_samples, y_samples], dim=-1))
-        T1 = self.F_func(torch.cat([x_tile, y_tile], dim=-1)) - 1.  # shape [sample_size, sample_size, 1]
-
-        lower_bound = T0.mean() - (T1.logsumexp(dim=1) - np.log(sample_size)).exp().mean()
-        return lower_bound
-
-    def learning_loss(self, x_samples, y_samples):
-        return -self.forward(x_samples, y_samples)
 
 
 class JSDLoss(nn.Module):

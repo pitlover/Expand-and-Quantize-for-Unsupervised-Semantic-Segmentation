@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_swav1.0_cosine100_tp0.1_prototype64_tsne"
+  name: "CLUSTER_posX_swav1.0_cosine100_tp0.1_prototype512_noqueue_lr3.4_adam_dim256_eps0.03"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -24,19 +24,19 @@ model:
     pretrained_weights: null
     dropout: false
   enc_num_blocks: 1
-  semantic_dim: 512
-  hidden_dim: 512
+  semantic_dim: 256
+  hidden_dim: 256
   last_norm: false
   agg_type: "concat"
-#  k_means:
-#    init: "k-means++"
-#    n_cluster: 64
-#    n_pos: 16
-  tsne: true # default False
+  #  k_means:
+  #    init: "k-means++"
+  #    n_cluster: 64
+  #    n_pos: 16
+  tsne: false # default False
 
 # ---------------------------------------------------------------- #
 loss:
-  info_nce_weight: 1.0
+  info_nce_weight: 0.0
   swav_weight: 1.0
   info_nce:
     neg_sample: 100
@@ -45,11 +45,11 @@ loss:
     cal_type: "cosine" # "random", "cosine", "distance"
 
   cluster:
-    num_prototypes: 64 # TODO check
-    queue_start_iter: 0 # TODO check
-    queue_stack_iter: 5
+    num_prototypes: 512 # TODO check
+    queue_start_iter: 20000 # TODO check -> no queue used and find when to use queue!
+    queue_stack_iter: 5 # TODO check
     temperature: 0.1
-    eps: 0.05 # TODO check
+    eps: 0.03 # TODO check
 
 # ---------------------------------------------------------------- #
 dataset:
@@ -79,7 +79,7 @@ dataloader:
 optimizer:
   model:
     name: "adamw"
-    lr: 5.0e-7
+    lr: 3.0e-4
     weight_decay: 1e-4
   cluster:
     name: "adam"

@@ -47,7 +47,7 @@ class ClusterWrapper(nn.Module):
             if self.contra_pos_weight > 0.0:
                 model_loss += (output["contra-loss-pos"] * self.contra_pos_weight)
             if self.cluster_weight > 0.0:
-                model_loss += (output["swav-loss"] * self.contra_pos_weight)
+                model_loss += (output["swav-loss"] * self.cluster_weight)
 
         output["loss"] = model_loss
 

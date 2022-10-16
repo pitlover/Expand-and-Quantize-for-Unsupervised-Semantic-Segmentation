@@ -104,6 +104,7 @@ class DINOCluster(nn.Module):
 
         semantic_feat = self.semantic_enc_proj(
             dino_feat)  # (2b, hidden_d, h, w)    # TODO maybe after noramlize for eval?
+
         semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
 
         flat_semantic_feat = semantic_feat.permute(0, 2, 3, 1).contiguous()
@@ -137,7 +138,7 @@ class DINOCluster(nn.Module):
                 # ------------------------- #
                 flat_ori_feat = semantic_feat_img1.permute(0, 2, 3, 1).contiguous().view(-1,
                                                                                          semantic_feat_img1.shape[1])
-                cpu_flat_ori_feat = flat_ori_feat.detach().cpu().numpy()  # (bhw, d)
+                cpu_flat_ori_feat = flat_ori_feat.clone().detach().cpu().numpy()  # (bhw, d)
                 tsne_np1 = TSNE(n_components=2)
                 semantic_np = tsne_np1.fit_transform(cpu_flat_ori_feat)
 

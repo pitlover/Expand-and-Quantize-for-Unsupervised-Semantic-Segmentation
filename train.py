@@ -59,7 +59,8 @@ def train_epoch(
 
     # TODO Queue (prototype) design
     queue = torch.zeros(
-        cfg["loss"]["cluster"]["queue_stack_iter"] * 2 * cfg["dataloader"]["train"]["batch_size"] // get_world_size() * (cfg["dataset"]["train"]["res"] // 8) ** 2, # TODO check queue size
+        cfg["loss"]["cluster"]["queue_stack_iter"] * 2 * cfg["dataloader"]["train"][
+            "batch_size"] // get_world_size() * (cfg["dataset"]["train"]["res"] // 8) ** 2,  # TODO check queue size
         cfg["model"]["hidden_dim"],
         device=device)
 
@@ -92,6 +93,12 @@ def train_epoch(
             step_start_time = time.time()
             scaler.unscale_(optimizers[0])
             grad_norm = clip_grad_norm_(model_m.model.parameters(), max_norm=clip_grad)
+
+            if it < cfg["loss"]["cluster"]["freeze_prototypes_niter"]:
+                for name, p in model.named_parameters():
+                    if "prototypes" in name:
+                        p.grad = None
+
             for optim, sched in zip(optimizers, schedulers):
                 scaler.step(optim)
                 scaler.update()

@@ -63,17 +63,6 @@ class InfoNCELoss(nn.Module):
         :param num_neg: number of negative samples
         :return:
         '''
-        # jump = x.shape[0] // b  # hw
-        # split_x = torch.chunk(x, chunks=b, dim=0)  # (bhw/b, d)
-        # neg = torch.zeros(x.shape[0], num_neg, x.shape[1], device=x.device)  # (bhw, n, d)
-        #
-        # for iter in range(b):
-        #     cos_similarity_ = pairwise_cosine_similarity(split_x[iter], x)  # (bhw/b, bhw) high value -> high same
-        #     negative_index = torch.topk(cos_similarity_, num_neg, largest=False, dim=-1)  # (bhw/b, n) small similarity
-        #     neg_ = F.embedding(negative_index.indices, x)  # (bhw/b, n, d)
-        #     neg[iter * jump: (iter + 1) * jump] = neg_
-        #     del cos_similarity_, negative_index, neg_
-        # del split_x
         cos_similarity = pairwise_cosine_similarity(x)
         negative_index = torch.topk(cos_similarity, num_neg, largest=False, dim=-1)  # (bhw/b, n) small similarity
         neg = F.embedding(negative_index.indices, x)
@@ -116,6 +105,7 @@ class InfoNCELoss(nn.Module):
         # flat_x1 = x1
         # flat_x2 = x2
 
+        neg_index = None
         if self.cal_type == "random":
             neg = self.random(flat_x1)
         elif self.cal_type == "distance":
@@ -220,8 +210,41 @@ class ClusterLoss(nn.Module):
         # cluster assignment prediction
         x = out_prototypes / self.temperature
         loss = -0.5 * torch.mean(torch.sum(q * F.log_softmax(x, dim=1), dim=1))
+        del q, x
 
         return loss, queue
+
+    # def forward(self, normalized_semantic_feat: torch.Tensor, out_prototypes: torch.Tensor, weight,
+    #             queue: torch.Tensor, neg_index):
+    #     '''
+    #     :param normalized_semantic_feat: (2bhw, hidden_dim)
+    #     :param out_prototypes: (2bhw, num_prototypes)
+    #     :param weight: Linear Classifier weight
+    #     :param queue: (2bhw, num_prototypes) maybe same as out_prototypes?
+    #     :return:
+    #     '''
+    #     # cluster assignment prediction
+    #     x = out_prototypes / self.temperature
+    #     scores = F.softmax(x, dim=1)  # (2bhw,)
+    #     ori_scores, aug_scores = torch.chunk(scores, chunks=2, dim=0)  # (bhw, n_prototypes)
+    #
+    #     pos_similarity = torch.multiply(ori_scores, aug_scores)
+    #     pos_similarity = torch.exp(pos_similarity / self.temperature)
+    #     neg = F.embedding(neg_index, ori_scores)
+    #     neg_similarity = self.paired_similiarty(ori_scores, neg)
+    #
+    #     positive = torch.sum(pos_similarity, dim=1)
+    #     negative = torch.sum(neg_similarity, dim=1)
+    #
+    #     cluster_loss = -(torch.log(positive) - torch.log(positive + negative))
+    #
+    #     avg_p = aug_scores.mean(0)
+    #     avg_entropy = -avg_p * torch.log(avg_p + 1e-8)
+    #     avg_entropy = torch.sum(avg_entropy, dim=-1)  # (1,)
+    #
+    #     loss = torch.mean(cluster_loss) - self.epsilon * avg_entropy
+    #
+    #     return loss, queue
 
 
 class CLUBLoss(nn.Module):

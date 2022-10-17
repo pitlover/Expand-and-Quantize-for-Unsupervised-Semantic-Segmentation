@@ -66,14 +66,22 @@ class DINOCluster(nn.Module):
         if random.randint(0, 3) == 0:  # 25%
             x_aug = transforms.GaussianBlur(kernel_size=3)(x_aug)  # texture
 
-        '''
-        x_aug = transforms.Compose([
-                transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
-                transforms.RandomGrayscale(0.2),
-                transforms.RandomApply([T.GaussianBlur((5, 5))])
-            ])
-        '''
         return x_aug
+        # x_aug = transforms.Compose([
+        #         transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
+        #         transforms.RandomGrayscale(0.2),
+        #         transforms.RandomApply([T.GaussianBlur((3, 3))])
+        #     ])
+        #
+        # return x_aug
+
+        # import kornia.augmentation as Kg
+        # Augmentation = nn.Sequential(
+        #     Kg.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.8),
+        #     Kg.RandomGrayscale(p=0.2),
+        #     Kg.RandomGaussianBlur((3, 3), (0.1, 2.0), p=0.5))
+        #
+        # return Augmentation(x)
 
     def _geometric_aug(self, x: torch.Tensor):
         x_aug = transforms.Compose([
@@ -111,6 +119,13 @@ class DINOCluster(nn.Module):
         flat_semantic_feat = flat_semantic_feat.view(-1, semantic_feat.shape[1])
 
         normalized_semantic_feat = F.normalize(flat_semantic_feat, dim=1, p=2)  # TODO is it right ?
+
+        # normalize the prototypes
+        with torch.no_grad():
+            w = self.prototypes.weight.data.clone()
+            w = F.normalize(w, dim=1, p=2)
+            self.prototypes.weight.copy_(w)
+
         out_prototypes = self.prototypes(normalized_semantic_feat)
 
         if self.training and queue is not None:
@@ -118,11 +133,7 @@ class DINOCluster(nn.Module):
                 self.queue = queue
                 self.queue_first_time = False
 
-        # normalize the prototypes
-        with torch.no_grad():
-            w = self.prototypes.weight.data.clone()
-            w = F.normalize(w, dim=1, p=2)
-            self.prototypes.weight.copy_(w)
+
 
         output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
         output["swav-loss"], queue = self.cluster_loss(normalized_semantic_feat,

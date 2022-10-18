@@ -57,6 +57,7 @@ def train_epoch(
 
     data_start_time = time.time()
 
+
     # TODO Queue (prototype) design
     queue = torch.zeros(
         cfg["loss"]["cluster"]["queue_stack_iter"] * 2 * cfg["dataloader"]["train"][
@@ -123,6 +124,7 @@ def train_epoch(
             loss = total_loss / num_accum
             # loss.backward()
             scaler.scale(loss).backward()
+
         # -------------------------------- print -------------------------------- #
 
         if it % print_interval == 0:

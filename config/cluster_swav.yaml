@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_swav1.0_cosine100_tp0.1_prototype1024_queue150_lr5.7_adam_dim512_eps0.03_norm_enc3"
-  notes: ""
+  name: "CLUSTER_pos1.0_swav1.0_cosine100_tp0.1_prototype1024_queue150_lr3.4_adam_dim512_eps0.03_evallr"
+  notes: "leaky_relu"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -80,7 +80,7 @@ dataloader:
 optimizer:
   model:
     name: "adamw"
-    lr: 5.0e-7
+    lr: 3.0e-4
     weight_decay: 1e-4
   cluster:
     name: "adam"

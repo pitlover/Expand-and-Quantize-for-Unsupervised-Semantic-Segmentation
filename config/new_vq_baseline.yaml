@@ -2,67 +2,61 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_posX_swav1.0_cosine100_tp0.1_prototype1024_queue150_lr3.4_adam_dim512_eps0.03"
-  notes: "leaky_relu"
+  name: "NEW_VQ_baseline"
+  notes: ""
 
 # ---------------------------------------------------------------- #
 seed: 10
 num_classes: 27
-dataset_name: "cocostuff27" # cityscapes, cocostuff27
+dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
-is_visualize: true # default false
-visualize_path : "./visualize/swav1.0_lr5.7"
-
+is_visualize: false # default false
+visualize_path : "./visualize/new_vq"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null
+
 # ---------------------------------------------------------------- #
 model:
   pretrained:
     model_type: "vit_small"
     dino_patch_size: 8
-    freeze_backbone: true # default true
+    freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
     dropout: false
   enc_num_blocks: 1
-  semantic_dim: 512
+  dec_num_blocks: 3
   hidden_dim: 512
   last_norm: false
-  agg_type: "concat"
-  #  k_means:
-  #    init: "k-means++"
-  #    n_cluster: 64
-  #    n_pos: 16
-  tsne: false # default False
+  vq:
+    vq_type: "param"  # ema, param
+    num_codebooks: [ 8192 ]
+    embed_dims: [ 512 ]
+    beta: 0.25
+    normalize: "l2"  # l2, z_norm, z_trainable, none
+    use_restart: false
+    use_split: true
+    use_gumbel: false
+    decay: 0.99
+    eps: 1.0e-5
+    num_pq: [ 1 ] # 1 for vq
+    agg_type: "concat"  # add, concat
 
 # ---------------------------------------------------------------- #
 loss:
-  info_nce_weight: 0.0
-  swav_weight: 1.0
-  info_nce:
-    neg_sample: 100
-    temperature: 0.1
-    normalize: "l2"
-    cal_type: "cosine" # "random", "cosine", "distance"
-
-  cluster:
-    num_prototypes: 1024 # TODO check
-    queue_start_iter: 150 # TODO check -> no queue used and find when to use queue!
-    queue_stack_iter: 5 # TODO check
-    temperature: 0.1
-    eps: 0.03 # TODO check
-    freeze_prototypes_niter: 100
+  recon_weight: 1.0
+  vq_weight: 1.0
 
 # ---------------------------------------------------------------- #
 dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    crop_type: null # "five" # null
+    crop_type: "five" # null, "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
-    res: 224        # 224, 320
+    res: 224
   val:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
@@ -72,10 +66,10 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
+    batch_size: 128  # total
     num_workers: 8  # total
   val:
-    batch_size: 32  # total -> "1" for visualization
+    batch_size: 32  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
@@ -83,7 +77,7 @@ optimizer:
   model:
     name: "adamw"
     lr: 3.0e-4
-    weight_decay: 1e-4
+    weight_decay: 1.0e-6
   cluster:
     name: "adam"
     lr: 3.0e-3
@@ -94,7 +88,7 @@ optimizer:
 # ---------------------------------------------------------------- #
 scheduler:
   model:
-    name: "constant" # cos, constant
+    name: "constant"
   cluster:
     name: "constant"
   linear:
@@ -102,13 +96,13 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
+  output_type: "vq0"
   extra_classes: 0
-
 
 # ---------------------------------------------------------------- #
 train:
   max_epochs: 10
   print_interval_iters: 25
-  valid_interval_iters: 25
+  valid_interval_iters: 100
   clip_grad: 1.0
   num_accum: 1

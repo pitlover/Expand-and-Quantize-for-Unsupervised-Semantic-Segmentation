@@ -96,10 +96,11 @@ class DINOCluster(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def forward(self, img: torch.Tensor, queue: torch.Tensor = None
+    def forward(self, img: torch.Tensor, aug_img : torch.Tensor, queue: torch.Tensor = None
                 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         img_aug_1 = img  # (b, 3, h, w)
-        img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
+        img_aug_2 = aug_img  # (b, 3, h, w)
+        # img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
 
         # TODO contrast geometric
         # seed = random.randint(0, 2147483647)
@@ -132,8 +133,6 @@ class DINOCluster(nn.Module):
             if self.queue_first_time:
                 self.queue = queue
                 self.queue_first_time = False
-
-
 
         output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
         output["swav-loss"], queue = self.cluster_loss(normalized_semantic_feat,

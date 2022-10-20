@@ -6,7 +6,8 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from utils.dist_utils import is_distributed_set, get_rank, get_world_size
-from data.dataset import UnSegDataset
+from data.dataset_aug import UnSegDataset
+# from data.dataset import UnSegDataset
 
 from model.dino_unseg import DINOUnSeg
 from model.dino_contra import DINOContra
@@ -15,6 +16,7 @@ from model.dino_vae import DINOVae
 from model.dino_res import DINORes
 # from model.dino_cluster_kmeans import DINOCluster
 from model.dino_cluster import DINOCluster
+from model.dino_new_vq import DINONewVq
 
 from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
 from model.blocks.club_encoder import CLUBEncoder
@@ -22,7 +24,7 @@ from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
-
+from wrapper.NewVQWrapper import DINONewVQWrapper
 
 # from wrapper.ClusterWrapper_kmeans import ClusterWrapper
 
@@ -33,6 +35,8 @@ def build_model(cfg: dict,
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
+    elif "new" in name:
+        model = DINONewVQWrapper(cfg, DINONewVq(cfg["model"], cfg["loss"]))
     elif "cluster" in name:
         model = ClusterWrapper(cfg, DINOCluster(cfg["model"], cfg["loss"], world_size=world_size))
     elif "res" in name:

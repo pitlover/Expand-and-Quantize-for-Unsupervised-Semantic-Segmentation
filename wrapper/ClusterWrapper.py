@@ -34,12 +34,13 @@ class ClusterWrapper(nn.Module):
 
     def forward(self,
                 img: torch.Tensor,
+                aug_img : torch.Tensor,
                 label: torch.Tensor,
                 queue: torch.Tensor = None,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
 
-        dino_feat, semantic_feat, out_prototypes, output = self.model(img, queue)
+        dino_feat, semantic_feat, out_prototypes, output = self.model(img, aug_img, queue)
 
         model_loss = torch.zeros(1, device=img.device)
 

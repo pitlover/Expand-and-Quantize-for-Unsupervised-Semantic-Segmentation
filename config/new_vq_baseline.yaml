@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_VQ_baseline"
+  name: "NEW_VQ_baseline_weightedsum_norml1_kmeansinitial_4096_noenc"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -27,17 +27,19 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 512
+  hidden_dim: 384
   last_norm: false
   vq:
     vq_type: "param"  # ema, param
-    num_codebooks: [ 8192 ]
-    embed_dims: [ 512 ]
+    num_codebooks: [ 4096c ]
+    embed_dims: [ 384 ]
     beta: 0.25
-    normalize: "l2"  # l2, z_norm, z_trainable, none
+    normalize: "none"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_split: true
     use_gumbel: false
+    use_weighted_sum : true # default false
+    need_initialized : "kmeans" # default none : kmeans, uni, normal
     decay: 0.99
     eps: 1.0e-5
     num_pq: [ 1 ] # 1 for vq

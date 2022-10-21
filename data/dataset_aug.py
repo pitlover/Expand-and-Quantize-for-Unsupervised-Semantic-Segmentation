@@ -242,12 +242,12 @@ class CroppedDataset(Dataset):
         """
         image_path = join(self.img_dir, "{}.jpg".format(index))
         label_path = join(self.label_dir, "{}.png".format(index))
-        image = Image.open(image_path).convert('RGB')
+        image_ = Image.open(image_path).convert('RGB')
         label = Image.open(label_path)
 
-        image = self.transform(image)  # (3, 224, 224)
+        image = self.transform(image_)  # (3, 224, 224)
         label = self.target_transform(label).squeeze(0)  # (224, 224)
-        img_aug = self.aug_transform(image)
+        img_aug = self.aug_transform(image_)
 
         label = (label - 1)
         mask = (label == -1)

@@ -68,6 +68,7 @@ class DINONewVQWrapper(nn.Module):
             out = feat.detach()
         elif "vq" == self.output_type[:2]:
             out = feat_vqs.detach()  # (b, d, h, w)
+
         else:
             raise ValueError(f"Unsupported output type {self.output_type}.")
 

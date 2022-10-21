@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,6 +9,7 @@ from model.blocks.resnet import EncResBlock, DecResBlock
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
+
 
 class DINONewVq(nn.Module):
     def __init__(self, cfg: dict, cfg_loss: dict):
@@ -21,11 +22,11 @@ class DINONewVq(nn.Module):
         self.hidden_dim = cfg.get("hidden_dim", self.feat_dim)
 
         # -------- semantic-encoder -------- #
-        # num_enc_blocks = cfg["enc_num_blocks"]
-        # semantic_enc_proj = []
-        # for i in range(num_enc_blocks):
-        #     semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
-        # self.enc_proj = nn.Sequential(*semantic_enc_proj)
+        num_enc_blocks = cfg["enc_num_blocks"]
+        semantic_enc_proj = []
+        for i in range(num_enc_blocks):
+            semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
+        self.enc_proj = nn.Sequential(*semantic_enc_proj)
 
         # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
@@ -41,7 +42,7 @@ class DINONewVq(nn.Module):
         vq_kwargs = dict(beta=self.beta,
                          normalize=self.normalize,
                          use_weighted_sum=self.use_weighted_sum,
-                         need_initialized = self.need_initialized)
+                         need_initialized=self.need_initialized)
 
         self.num_pq = cfg["vq"].get("num_pq", 1)
 
@@ -59,7 +60,15 @@ class DINONewVq(nn.Module):
             #     for i in range(self.num_vq)
             # ]
         elif self.vq_type == "param":
-            self.codebook = Codebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
+            vq_blocks = [
+                Codebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
+                if (self.num_pq == 1) else
+                ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+                                        quantizer_cls=Codebook)
+                for i in range(self.num_vq)
+            ]
+            self.vq_blocks = nn.ModuleList(vq_blocks)
+            # self.codebook = Codebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
         else:
             raise ValueError(f"Unsupported vq type {self.vq_type}.")
 
@@ -80,18 +89,15 @@ class DINONewVq(nn.Module):
         # img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
 
         dino_feat = self.extractor(img)  # (b, 384, 28, 28)
-        feat = dino_feat
-        # feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
+        feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
 
-        output = dict()
-
-        quantized_feat, vq_loss = self.codebook(feat)
+        quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat)
 
         recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
         recon_loss = F.mse_loss(recon, dino_feat)
 
-        output["recon-loss"] = recon_loss
-        output["vq-loss"] = vq_loss
+        outputs["recon-loss"] = recon_loss
+
         # # contrastive loss
         # top_dis_prob_1, top_dis_prob_2 = torch.chunk(vq_top_dis_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
         # output["contra-loss-pos"] = self.jsd(top_dis_prob_1, top_dis_prob_2)
@@ -102,7 +108,7 @@ class DINONewVq(nn.Module):
         # split half
         # feat = torch.chunk(feat, chunks=2, dim=0)[0]
         # feat_vqs = [torch.chunk(vq_i, chunks=2, dim=0)[0] for vq_i in feat_vqs]
-        return feat, quantized_feat, output
+        return feat, quantized_feat, outputs
 
 
 class Codebook(nn.Module):
@@ -133,8 +139,8 @@ class Codebook(nn.Module):
         if self.use_weighted_sum:
             assert self.normalize == "none", "Weight_sum should be unnormalized"
         if normalize == "z_trainable":
-            self.z_mean = nn.Parameter(torch.zeros(self.embed_dim))
-            self.z_log_var = nn.Parameter(torch.zeros(self.embed_dim))
+            self.z_mean = nn.Parameter(torch.zeros(self.latent_dim))
+            self.z_log_var = nn.Parameter(torch.zeros(self.latent_dim))
 
         self.need_initialized = need_initialized
 
@@ -178,22 +184,7 @@ class Codebook(nn.Module):
             z_flat_mean = self.z_mean
             z_flat_std = self.z_log_var.exp().sqrt()
 
-            if self.training:
-                with torch.no_grad():
-                    z_flat_mean_orig = torch.mean(z_flat, dim=0)  # (d,)
-                    z_flat_sq_mean_orig = torch.mean(z_flat * z_flat, dim=0)  # (d,)
-
-                    z_flat_mean_orig = all_reduce_tensor(z_flat_mean_orig, op="mean")
-                    z_flat_sq_mean_orig = all_reduce_tensor(z_flat_sq_mean_orig, op="mean")
-
-                    z_flat_var_orig = z_flat_sq_mean_orig - (z_flat_mean_orig * z_flat_mean_orig)
-                    z_flat_log_var_orig = z_flat_var_orig.log()
-
-                    self.z_mean.data.mul_(self.decay).add_(z_flat_mean_orig, alpha=1 - self.decay)
-                    self.z_log_var.data.mul_(self.decay).add_(z_flat_log_var_orig, alpha=1 - self.decay)
-
             z_norm = (z_flat - z_flat_mean) / (z_flat_std + 1e-5)
-            # codebook_norm = (codebook - z_flat_mean) / (z_flat_std + 1e-5)
 
             codebook_std, codebook_mean = torch.std_mean(codebook, dim=0)  # (d,)
             codebook_norm = (codebook - codebook_mean) / (codebook_std + 1e-5)
@@ -208,10 +199,10 @@ class Codebook(nn.Module):
             2 * (torch.matmul(z_norm, codebook_norm.t()))
 
         min_encoding_indices = torch.argmin(d, dim=1)
-        distance_prob = F.softmax(-d / 0.1, dim=1)
+        distance_prob = F.softmax(-d / 0.5, dim=1)
 
         if self.use_weighted_sum:
-            z_q = torch.matmul(distance_prob , codebook_norm)  # TODO check temperature scaling
+            z_q = torch.matmul(distance_prob, codebook_norm)  # TODO check temperature scaling
         else:
             z_q = self.embedding(min_encoding_indices)
 
@@ -224,4 +215,66 @@ class Codebook(nn.Module):
             z_q = z_norm + (z_q - z_norm).detach()
         z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
 
-        return z_q, q_loss
+        output = dict()
+        output["vq-loss"] = q_loss
+
+        return z_q, output, distance_prob
+
+
+class ProductQuantizerWrapper(nn.Module):
+
+    def __init__(self,
+                 num_pq: int,
+                 num_codebook: int,
+                 embed_dim: int,
+                 beta: float = 0.25,  # commitment loss
+                 normalize: Optional[str] = None,
+                 decay: float = 0.99,
+                 eps: float = 1e-5,
+                 use_restart: bool = False,
+                 use_gumbel: bool = False,
+                 use_split: bool = False,
+                 use_weighted_sum: bool = False,
+                 update_norm: bool = True,
+                 need_initialized: str = "none",
+                 quantizer_cls=Codebook,
+                 ) -> None:
+        super().__init__()
+        if embed_dim % num_pq != 0:
+            raise ValueError(f"Embed dim {embed_dim} should be divisible by #PQ {num_pq}.")
+        self.num_pq = num_pq
+        self.pq_dim = embed_dim // num_pq
+
+        self.quantizers = nn.ModuleList([
+            quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize,
+                          use_weighted_sum=use_weighted_sum, need_initialized=need_initialized)
+            for _ in range(self.num_pq)
+        ])
+
+    def forward(self, z: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
+        # b, c, h, w = z.shape
+        z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
+
+        z_quantized = list()
+        outputs = dict()
+        distance_prob = list()
+
+        for i in range(self.num_pq):
+            q_i, output_i, prob_i = self.quantizers[i](z_split[i])
+            z_quantized.append(q_i)
+            if i == 0:
+                for k, v in output_i.items():
+                    outputs[k] = v
+            else:
+                for k, v in output_i.items():
+                    outputs[k] = outputs[k] + v
+            distance_prob.append(prob_i)
+
+        z_quantized = torch.cat(z_quantized, dim=1)
+
+        for k, v in outputs.items():
+            outputs[k] /= self.num_pq
+
+        distance_prob = torch.cat(distance_prob, dim=-1)  # (n, K x #pq)
+
+        return z_quantized, outputs, distance_prob

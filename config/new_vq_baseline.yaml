@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_VQ_baseline_weightedsum_norml1_kmeansinitial_4096_noenc"
-  notes: ""
+  name: "NEW_PQ_baseline_norml1_kmeansinitial_4096_wdX"
+  notes: "4096-512-z_trainable"
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -27,22 +27,22 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 384
+  hidden_dim: 512
   last_norm: false
   vq:
     vq_type: "param"  # ema, param
-    num_codebooks: [ 4096c ]
-    embed_dims: [ 384 ]
+    num_codebooks: [ 4096 ]
+    embed_dims: [ 512 ]
     beta: 0.25
-    normalize: "none"  # l2, z_norm, z_trainable, none
+    normalize: "z_trainable"  # l2, z_norm, z_trainable, none
     use_restart: false
     use_split: true
     use_gumbel: false
-    use_weighted_sum : true # default false
-    need_initialized : "kmeans" # default none : kmeans, uni, normal
+    use_weighted_sum : false # default true, true
+    need_initialized : "none" # default none : kmeans, uni, normal
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 1 ] # 1 for vq
+    num_pq: [ 16 ] # 1 for vq
     agg_type: "concat"  # add, concat
 
 # ---------------------------------------------------------------- #
@@ -79,7 +79,7 @@ optimizer:
   model:
     name: "adamw"
     lr: 3.0e-4
-    weight_decay: 1.0e-6
+    weight_decay: 0.0
   cluster:
     name: "adam"
     lr: 3.0e-3
@@ -103,7 +103,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 2
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0

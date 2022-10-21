@@ -213,13 +213,11 @@ class Codebook(nn.Module):
         z_flat = z.view(-1, self.latent_dim)  # (bhw, d)
         if self.need_initialized != "none" and self.training:
             if self.need_initialized == "rand":
-                print("Random Initializing ... ")
                 self.prepare_restart(torch.zeros(self.num_codebook_vectors, dtype=torch.long, device=z.device),
                                      z_flat)
                 self.restart()
 
             elif self.need_initialized == "kmeans":
-                print("Kmeans Initializing ... ")
                 # clustering = KMeans(init="k-means++", n_clusters=self.num_codebook_vectors, random_state=0)
                 # cpu_z_flat = z_flat.detach().cpu().numpy()
                 # clustering.fit(cpu_z_flat)
@@ -233,11 +231,9 @@ class Codebook(nn.Module):
                 self.embedding.weight.data.copy_(centroids)
 
             elif self.need_initialized == "uni":
-                print("Uni Initializing ... ")
                 nn.init.xavier_uniform_(self.embedding.weight)
 
             elif self.need_initialized == "normal":
-                print("Normal Initializing ... ")
                 nn.init.xavier_normal_(self.embedding.weight)
             self.need_initialized = "none"
 

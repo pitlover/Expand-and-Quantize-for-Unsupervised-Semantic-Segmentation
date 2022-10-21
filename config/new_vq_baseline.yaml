@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_kmeansinitial_4096_top1"
+  name: "NEW_PQ_baseline_l2_randinitial_4096_top1"
   notes: "4096-512-restart"
 
 # ---------------------------------------------------------------- #
@@ -37,7 +37,7 @@ model:
     normalize: "l2"  # l2, z_norm, z_trainable, none
     use_restart: false # default false, true
     use_weighted_sum : false # default false, true
-    need_initialized : "kmeans" # default none : kmeans, uni, normal, rand
+    need_initialized : "rand" # default none : kmeans, uni, normal, rand
     decay: 0.99
     eps: 1.0e-5
     num_pq: [ 16 ] # 1 for vq
@@ -66,7 +66,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 32  # total
+    batch_size: 128  # total
     num_workers: 8  # total
   val:
     batch_size: 32  # total

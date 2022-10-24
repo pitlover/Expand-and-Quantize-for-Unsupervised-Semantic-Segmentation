@@ -392,6 +392,7 @@ class EMAVectorQuantizer(nn.Module):
         #
         # z_flat = z.view(-1, d)  # (bhw, d) = (n, d)
         # b, h, w, d = z.shape
+        # TODO kmeans sampling
         z_flat = z
         # n = b * h * w
 

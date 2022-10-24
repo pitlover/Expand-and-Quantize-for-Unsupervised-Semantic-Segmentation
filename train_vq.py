@@ -4,6 +4,7 @@ import os
 import time
 import pprint
 import wandb
+import gc
 import torch
 import torch.nn as nn
 from torch.nn.parallel.distributed import DistributedDataParallel
@@ -49,6 +50,7 @@ def train_epoch(
     clip_grad = cfg["train"].get("clip_grad", 1.0)
 
     model.train()
+    gc.collect()
     torch.cuda.empty_cache()
     torch.set_grad_enabled(True)  # same as 'with torch.enable_grad():'
     grad_norm = torch.tensor(0.0, dtype=torch.float32, device=device)  # placeholder
@@ -81,7 +83,6 @@ def train_epoch(
             backward_start_time = time.time()
             loss = total_loss / num_accum
             scaler.scale(loss).backward()
-            # loss.backward()
             backward_time = time.time() - backward_start_time
 
             step_start_time = time.time()
@@ -102,7 +103,6 @@ def train_epoch(
                     total_loss, output, _ = model(img, aug_img,
                                                   label)  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
-                # loss.backward()
                 scaler.scale(loss).backward()
         else:  # non-update step
             # and not DDP
@@ -110,7 +110,6 @@ def train_epoch(
                 total_loss, output, _ = model(img, aug_img, label)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
-            # loss.backward()
             scaler.scale(loss).backward()
 
         # -------------------------------- print -------------------------------- #
@@ -142,7 +141,7 @@ def train_epoch(
 
         if (it > 0) and (it % valid_interval == 0):
             _, cluster_result, linear_result = valid_epoch(
-                model, valid_dataloader, cfg, device, it, is_crf=False)
+                model, valid_dataloader, cfg, device, current_iter, is_crf=False)
 
             if is_master():
                 if best_metric["Cluster_mIoU"] <= cluster_result["iou"].item():
@@ -181,6 +180,7 @@ def train_epoch(
                     print(s)
 
             model.train()
+            gc.collect()
             torch.cuda.empty_cache()
             torch.set_grad_enabled(True)  # same as 'with torch.enable_grad():'
 
@@ -207,6 +207,7 @@ def valid_epoch(
     linear_m.reset()
 
     model.eval()
+    gc.collect()
     torch.cuda.empty_cache()
     torch.set_grad_enabled(False)  # same as 'with torch.no_grad():'
 

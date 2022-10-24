@@ -5,7 +5,9 @@ import torch.nn.functional as F
 import random
 
 from model.dino import DinoFeaturizer
-from model.blocks.resnet import EncResBlock, DecResBlock
+# TODO kmeans sampling
+from model.blocks.resnet_linear import EncResBlock, DecResBlock
+# from model.blocks.resnet import EncResBlock, DecResBlock
 
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
@@ -52,6 +54,7 @@ class DINONewVq(nn.Module):
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
         vq_embed_dims = cfg["vq"]["embed_dims"]
         assert len(vq_num_codebooks) == len(vq_embed_dims)
+        self.vq_num_codebooks = vq_num_codebooks[0]
         self.num_vq = len(vq_num_codebooks)
         self.beta = cfg["vq"]["beta"]
         self.vq_type = cfg["vq"]["vq_type"]
@@ -59,7 +62,7 @@ class DINONewVq(nn.Module):
         self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
         self.use_restart = cfg["vq"].get("use_restart", False)
         self.need_initialized = cfg["vq"].get("need_initialized", False)
-
+        self.n_kmeans = cfg["vq"].get("n_kmeans", 1)
         vq_kwargs = dict(beta=self.beta,
                          normalize=self.normalize,
                          use_restart=self.use_restart,
@@ -102,34 +105,71 @@ class DINONewVq(nn.Module):
                 DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
         self.dec_proj = nn.Sequential(*dec_proj)
 
-    def forward(self, img: torch.Tensor
+    def forward(self, img: torch.Tensor, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
         # # photometric aug
         # img_aug_1 = img
         # img_aug_2 = self._photo_aug(img)
         #
         # img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
+        if stage == 1:  # sampling kmeans
+            import gc
+            before_dino_feat = self.extractor(img)  # (b, 384, 28, 28)
+            b, d, h, w = before_dino_feat.shape
+            before_dino_feat = before_dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+            before_dino_feat = before_dino_feat.view(-1, d)  # (bhw, d)
 
-        dino_feat = self.extractor(img)  # (b, 384, 28, 28)
-        feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
+            kmeans = faiss.Kmeans(d=before_dino_feat.shape[-1], k=self.vq_num_codebooks, verbose=True, gpu=True)
+            kmeans.min_points_per_centorids= 5
+            cpu_before_dino_feat = before_dino_feat.detach().cpu().numpy().astype(np.float32)
+            kmeans.train(cpu_before_dino_feat)
+            query_vector = kmeans.centroids
 
-        quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat)
+            index = faiss.IndexFlatL2(cpu_before_dino_feat.shape[-1])
+            index.add(cpu_before_dino_feat)
+            _, idx = index.search(query_vector, self.n_kmeans)  # (n_cluster, n_kmeans_pos)
 
-        recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
-        recon_loss = F.mse_loss(recon, dino_feat)
+            idx = torch.from_numpy(idx)
+            idx = idx.reshape(-1)
+            del query_vector, cpu_before_dino_feat, kmeans, index
+            gc.collect()
+            torch.cuda.empty_cache()
 
-        outputs["recon-loss"] = recon_loss
+            feat = self.enc_proj(before_dino_feat[idx])
+            quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat)
+            recon = self.dec_proj(quantized_feat)  # (-1, hidden_dim)
+            recon_loss = F.mse_loss(recon, before_dino_feat[idx])
 
-        # # contrastive loss
-        # top_dis_prob_1, top_dis_prob_2 = torch.chunk(vq_top_dis_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
-        # output["contra-loss-pos"] = self.jsd(top_dis_prob_1, top_dis_prob_2)
-        #
-        # bottom_dis_prob_1, bottom_dis_prob_2 = torch.chunk(vq_bottom_dis_prob, chunks=2, dim=0)
-        # output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
+            outputs["recon-loss"] = recon_loss
 
-        # split half
-        # feat = torch.chunk(feat, chunks=2, dim=0)[0]
-        # feat_vqs = [torch.chunk(vq_i, chunks=2, dim=0)[0] for vq_i in feat_vqs]
+        else:
+            dino_feat = self.extractor(img)  # (b, 384, 28, 28)
+            # TODO kmeans sampling
+            b, d, h, w = dino_feat.shape
+            dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+            dino_feat = dino_feat.view(-1, d)  # (bhw, d)
+
+            feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
+
+            quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat)
+
+            recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
+            recon_loss = F.mse_loss(recon, dino_feat)
+
+            outputs["recon-loss"] = recon_loss
+            # TODO kmeans sampling
+            quantized_feat = quantized_feat.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
+
+            # # contrastive loss
+            # top_dis_prob_1, top_dis_prob_2 = torch.chunk(vq_top_dis_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
+            # output["contra-loss-pos"] = self.jsd(top_dis_prob_1, top_dis_prob_2)
+            #
+            # bottom_dis_prob_1, bottom_dis_prob_2 = torch.chunk(vq_bottom_dis_prob, chunks=2, dim=0)
+            # output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
+
+            # split half
+            # feat = torch.chunk(feat, chunks=2, dim=0)[0]
+            # feat_vqs = [torch.chunk(vq_i, chunks=2, dim=0)[0] for vq_i in feat_vqs]
         return feat, quantized_feat, outputs
 
 
@@ -208,9 +248,11 @@ class Codebook(nn.Module):
         output = dict()
 
         self.vq_count = self.vq_count.to(z.device)
+        # TODO kmeans_sampling
+        z_flat = z
+        # z = z.permute(0, 2, 3, 1).contiguous()  # (b, d, h, w) -> (b, h, w, d)
+        # z_flat = z.view(-1, self.latent_dim)  # (bhw, d)
 
-        z = z.permute(0, 2, 3, 1).contiguous()  # (b, d, h, w) -> (b, h, w, d)
-        z_flat = z.view(-1, self.latent_dim)  # (bhw, d)
         if self.need_initialized != "none" and self.training:
             if self.need_initialized == "rand":
                 self.prepare_restart(torch.zeros(self.num_codebook_vectors, dtype=torch.long, device=z.device),
@@ -218,23 +260,26 @@ class Codebook(nn.Module):
                 self.restart()
 
             elif self.need_initialized == "kmeans":
-                # clustering = KMeans(init="k-means++", n_clusters=self.num_codebook_vectors, random_state=0)
-                # cpu_z_flat = z_flat.detach().cpu().numpy()
-                # clustering.fit(cpu_z_flat)
-                # centroids = np.array(clustering.cluster_centers_)
-                # centroids = torch.from_numpy(centroids).float().to(z.device)
-                # self.embedding.weight.data.copy_(centroids)
-                kmeans = faiss.Kmeans(d=z_flat.shape[-1], k=self.num_codebook_vectors, verbose=True, gpu=True)
-                cpu_z_flat = z_flat.detach().cpu().numpy().astype(np.float32)
-                kmeans.train(cpu_z_flat)
-                centroids = torch.from_numpy(kmeans.centroids).float().to(z.device)
+                clustering = KMeans(init="k-means++", n_clusters=self.num_codebook_vectors, random_state=0)
+                cpu_z_flat = z_flat.detach().cpu().numpy()
+                clustering.fit(cpu_z_flat)
+                centroids = np.array(clustering.cluster_centers_)
+                centroids = torch.from_numpy(centroids).float().to(z.device)
                 self.embedding.weight.data.copy_(centroids)
+                # kmeans = faiss.Kmeans(d=z_flat.shape[-1], k=self.num_codebook_vectors, verbose=True, gpu=True)
+                # cpu_z_flat = z_flat.detach().cpu().numpy().astype(np.float32)
+                # kmeans.train(cpu_z_flat)
+                # centroids = torch.from_numpy(kmeans.centroids).float().to(z.device)
+                # self.embedding.weight.data.copy_(centroids)
+                # del centroids, cpu_z_flat, kmeans
+                # torch.cuda.empty_cache()
 
             elif self.need_initialized == "uni":
                 nn.init.xavier_uniform_(self.embedding.weight)
 
             elif self.need_initialized == "normal":
                 nn.init.xavier_normal_(self.embedding.weight)
+
             self.need_initialized = "none"
 
         codebook = self.embedding.weight
@@ -307,7 +352,8 @@ class Codebook(nn.Module):
 
         if not self.use_weighted_sum:
             z_q = z_norm + (z_q - z_norm).detach()
-        z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
+        # TODO kmeans sampling
+        # z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
 
         output["vq-loss"] = q_loss
 

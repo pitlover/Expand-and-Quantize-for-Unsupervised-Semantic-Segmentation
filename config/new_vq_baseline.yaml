@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_64*16_bs32"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -41,10 +41,10 @@ model:
 
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 32 ] # 1 for vq
+    num_pq: [ 64 ] # 1 for vq
     agg_type: "concat"  # add, concat
     n_kmeans: 8
-    use_kmeans_sampling: true # default false, true
+    use_kmeans_sampling: false # default false, true
 
 # ---------------------------------------------------------------- #
 loss:

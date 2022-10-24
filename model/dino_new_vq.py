@@ -6,8 +6,8 @@ import random
 
 from model.dino import DinoFeaturizer
 # TODO kmeans sampling
-from model.blocks.resnet_linear import EncResBlock, DecResBlock
-# from model.blocks.resnet import EncResBlock, DecResBlock
+# from model.blocks.resnet_linear import EncResBlock, DecResBlock
+from model.blocks.resnet import EncResBlock, DecResBlock
 
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
@@ -120,7 +120,7 @@ class DINONewVq(nn.Module):
             before_dino_feat = before_dino_feat.view(-1, d)  # (bhw, d)
 
             kmeans = faiss.Kmeans(d=before_dino_feat.shape[-1], k=self.vq_num_codebooks, verbose=True, gpu=True)
-            kmeans.min_points_per_centorids= 5
+            kmeans.min_points_per_centorids = 5
             cpu_before_dino_feat = before_dino_feat.detach().cpu().numpy().astype(np.float32)
             kmeans.train(cpu_before_dino_feat)
             query_vector = kmeans.centroids
@@ -145,9 +145,9 @@ class DINONewVq(nn.Module):
         else:
             dino_feat = self.extractor(img)  # (b, 384, 28, 28)
             # TODO kmeans sampling
-            b, d, h, w = dino_feat.shape
-            dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
-            dino_feat = dino_feat.view(-1, d)  # (bhw, d)
+            # b, d, h, w = dino_feat.shape
+            # dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+            # dino_feat = dino_feat.view(-1, d)  # (bhw, d)
 
             feat = self.enc_proj(dino_feat)  # (b, 384, 28, 28)
 
@@ -158,7 +158,7 @@ class DINONewVq(nn.Module):
 
             outputs["recon-loss"] = recon_loss
             # TODO kmeans sampling
-            quantized_feat = quantized_feat.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
+            # quantized_feat = quantized_feat.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
 
             # # contrastive loss
             # top_dis_prob_1, top_dis_prob_2 = torch.chunk(vq_top_dis_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
@@ -249,9 +249,9 @@ class Codebook(nn.Module):
 
         self.vq_count = self.vq_count.to(z.device)
         # TODO kmeans_sampling
-        z_flat = z
-        # z = z.permute(0, 2, 3, 1).contiguous()  # (b, d, h, w) -> (b, h, w, d)
-        # z_flat = z.view(-1, self.latent_dim)  # (bhw, d)
+        # z_flat = z
+        z = z.permute(0, 2, 3, 1).contiguous()  # (b, d, h, w) -> (b, h, w, d)
+        z_flat = z.view(-1, self.latent_dim)  # (bhw, d)
 
         if self.need_initialized != "none" and self.training:
             if self.need_initialized == "rand":
@@ -353,7 +353,7 @@ class Codebook(nn.Module):
         if not self.use_weighted_sum:
             z_q = z_norm + (z_q - z_norm).detach()
         # TODO kmeans sampling
-        # z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
+        z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
 
         output["vq-loss"] = q_loss
 

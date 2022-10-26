@@ -27,6 +27,19 @@ def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
     return neg
 
 
+class JiLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, prob1, prob2, q):
+        l1 = torch.sum(torch.matmul(q, prob1), dim=1)
+        l2 = torch.sum(torch.matmul(q, prob2), dim=1)
+        print(l1.shape, l2.shape)
+        exit()
+        loss = -0.5 * torch.mean(torch.sum(l1, l2, dim=1))
+        return loss
+
+
 class InfoNCELoss(nn.Module):
     def __init__(self,
                  normalize: str = "l2",
@@ -105,7 +118,6 @@ class InfoNCELoss(nn.Module):
         # flat_x1 = x1
         # flat_x2 = x2
 
-        neg_index = None
         if self.cal_type == "random":
             neg = self.random(flat_x1)
         elif self.cal_type == "distance":

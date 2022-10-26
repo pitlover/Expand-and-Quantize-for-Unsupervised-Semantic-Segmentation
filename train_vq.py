@@ -239,7 +239,8 @@ def valid_epoch(
                 result[k] += v
         count += 1
 
-        if cfg["is_visualize"] and (current_iter == 5000):
+        if cfg["is_visualize"] and (current_iter % 2500 == 1 or current_iter % 13600 == 1):
+            os.makedirs(cfg["visualize_path"], exist_ok=True)
             saved_data["img_path"].append("".join(img_path))
             saved_data["cluster_preds"].append(cluster_preds.cpu().squeeze(0))
             saved_data["linear_preds"].append(linear_preds.cpu().squeeze(0))
@@ -249,7 +250,7 @@ def valid_epoch(
     cluster_result = cluster_m.compute()  # {iou, accuracy}
     linear_result = linear_m.compute()  # {iou, accuracy}
 
-    if cfg["is_visualize"] and (current_iter == 5000):
+    if cfg["is_visualize"] and (current_iter % 2500 == 1 or current_iter % 13600 == 1):
         visualization(cfg["visualize_path"] + "/" + str(current_iter), cfg["dataset_name"], saved_data, cluster_m)
 
     barrier()

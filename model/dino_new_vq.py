@@ -13,6 +13,7 @@ from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
 import faiss
+from model.loss import InfoNCELoss, JSDLoss, JiLoss
 
 
 @torch.no_grad()
@@ -62,12 +63,14 @@ class DINONewVq(nn.Module):
         self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
         self.use_restart = cfg["vq"].get("use_restart", False)
         self.need_initialized = cfg["vq"].get("need_initialized", False)
+        self.jsd_ts = cfg_loss["jsd"].get("temperature", 1.0)
         self.n_kmeans = cfg["vq"].get("n_kmeans", 1)
         vq_kwargs = dict(beta=self.beta,
                          normalize=self.normalize,
                          use_restart=self.use_restart,
                          use_weighted_sum=self.use_weighted_sum,
-                         need_initialized=self.need_initialized)
+                         need_initialized=self.need_initialized,
+                         jsd_ts=self.jsd_ts)
 
         self.num_pq = cfg["vq"].get("num_pq", 1)
 
@@ -104,14 +107,19 @@ class DINONewVq(nn.Module):
             dec_proj.append(
                 DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
         self.dec_proj = nn.Sequential(*dec_proj)
-
-    def forward(self, img: torch.Tensor, stage: int = 0
+        # -------- loss -------- #
+        self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
+                                        neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
+                                        temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
+                                        cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
+                                        )
+        # self.jsd_loss = JiLoss()
+        self.jsd_loss = JSDLoss()
+    def forward(self, img: torch.Tensor, aug_img : torch.Tensor = None, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
-        # # photometric aug
-        # img_aug_1 = img
-        # img_aug_2 = self._photo_aug(img)
-        #
-        # img = torch.cat([img_aug_1, img_aug_2], dim=0)  # (2b, 3, h, w)
+        # photometric aug
+        img = torch.cat([img, aug_img], dim=0)  # (2b, 3, h, w)
+
         if stage == 1:  # sampling kmeans
             import gc
             before_dino_feat = self.extractor(img)  # (b, 384, 28, 28)
@@ -143,7 +151,7 @@ class DINONewVq(nn.Module):
             outputs["recon-loss"] = recon_loss
 
         else:
-            dino_feat = self.extractor(img)  # (b, 384, 28, 28)
+            dino_feat = self.extractor(img)  # (2b, 384, 28, 28)
             # TODO kmeans sampling
             # b, d, h, w = dino_feat.shape
             # dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
@@ -160,16 +168,18 @@ class DINONewVq(nn.Module):
             # TODO kmeans sampling
             # quantized_feat = quantized_feat.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
 
-            # # contrastive loss
-            # top_dis_prob_1, top_dis_prob_2 = torch.chunk(vq_top_dis_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
-            # output["contra-loss-pos"] = self.jsd(top_dis_prob_1, top_dis_prob_2)
-            #
-            # bottom_dis_prob_1, bottom_dis_prob_2 = torch.chunk(vq_bottom_dis_prob, chunks=2, dim=0)
-            # output["contra-loss-neg"] = self.jsd(bottom_dis_prob_1, bottom_dis_prob_2)
+            # MI loss
+            semantic_feat_img1, semantic_feat_img2 = torch.chunk(feat, chunks=2, dim=0)
+            outputs["info_nce"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+
+            # JSD loss
+            top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
+            outputs["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
 
             # split half
-            # feat = torch.chunk(feat, chunks=2, dim=0)[0]
-            # feat_vqs = [torch.chunk(vq_i, chunks=2, dim=0)[0] for vq_i in feat_vqs]
+            feat = torch.chunk(feat, chunks=2, dim=0)[0]
+            quantized_feat = torch.chunk(quantized_feat, chunks=2, dim=0)[0]
+
         return feat, quantized_feat, outputs
 
 
@@ -181,7 +191,8 @@ class Codebook(nn.Module):
                  normalize: str = "none",
                  use_restart: bool = False,
                  use_weighted_sum: bool = False,
-                 need_initialized: str = "kmeans"):
+                 need_initialized: str = "kmeans",
+                 jsd_ts : float = 1.0):
         super(Codebook, self).__init__()
         """
         embedding: (num_vq, embed_dim)
@@ -210,6 +221,7 @@ class Codebook(nn.Module):
             self.z_log_var = nn.Parameter(torch.zeros(self.latent_dim))
         self.use_restart = use_restart
         self.need_initialized = need_initialized
+        self.jsd_ts = jsd_ts
 
     @torch.no_grad()
     def prepare_restart(self, vq_current_count: torch.Tensor, z_flat: torch.Tensor) -> None:
@@ -312,7 +324,7 @@ class Codebook(nn.Module):
             2 * (torch.matmul(z_norm, codebook_norm.t()))
 
         min_encoding_indices = torch.argmin(d, dim=1)
-        distance_prob = F.softmax(-d / 0.5, dim=1)
+        distance_prob = F.softmax(-d / self.jsd_ts, dim=1)
         vq_indices = torch.argmin(d, dim=1)
 
         if self.use_weighted_sum:
@@ -376,6 +388,7 @@ class ProductQuantizerWrapper(nn.Module):
                  use_weighted_sum: bool = False,
                  update_norm: bool = True,
                  need_initialized: str = "none",
+                 jsd_ts : float = 1.0,
                  quantizer_cls=Codebook,
                  ) -> None:
         super().__init__()
@@ -386,7 +399,7 @@ class ProductQuantizerWrapper(nn.Module):
 
         self.quantizers = nn.ModuleList([
             quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize, use_restart=use_restart,
-                          use_weighted_sum=use_weighted_sum, need_initialized=need_initialized)
+                          use_weighted_sum=use_weighted_sum, need_initialized=need_initialized, jsd_ts=jsd_ts)
             for _ in range(self.num_pq)
         ])
 

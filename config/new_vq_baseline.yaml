@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_64*16_bs32"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_info1cos10_jsd0.1_ts1.0"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -10,8 +10,8 @@ seed: 10
 num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
-is_visualize: false # default false
-visualize_path: "./visualize/new_vq"
+is_visualize: true                           # default false
+visualize_path: "./visualize/new_vq_info"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null
@@ -30,27 +30,35 @@ model:
   hidden_dim: 1024
   last_norm: false
   vq:
-    vq_type: "param"  # ema, param
+    vq_type: "param"                          # ema, param
     num_codebooks: [ 512 ]
     embed_dims: [ 1024 ]
     beta: 0.25
-    normalize: "l2"  # l2, z_norm, z_trainable, none
-    use_restart: false # default false, true
-    use_weighted_sum: false # default false, true
-    need_initialized: "uni" # default none : kmeans, uni, normal, rand
+    normalize: "l2"                           # l2, z_norm, z_trainable, none
+    use_restart: false                        # default false, true
+    use_weighted_sum: false                   # default false, true
+    need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
 
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 64 ] # 1 for vq
-    agg_type: "concat"  # add, concat
+    num_pq: [ 32 ]                            # 1 for vq
+    agg_type: "concat"                        # add, concat
     n_kmeans: 8
-    use_kmeans_sampling: false # default false, true
+    use_kmeans_sampling: false                # default false, true
 
 # ---------------------------------------------------------------- #
 loss:
   recon_weight: 1.0
   vq_weight: 1.0
-
+  info_nce_weight : 1.0
+  jsd_weight : 0.1
+  info_nce:
+    normalize: "l2"
+    neg_sample: 10                           # TODO need check
+    temperature: 1.0                          # TODO need check
+    cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
+  jsd:
+    temperature : 1.0
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -64,7 +72,7 @@ dataset:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
     crop_type: null
-    loader_crop_type: "center"  # none for voc
+    loader_crop_type: "center"                # none for voc
     res: 320
 
 dataloader:

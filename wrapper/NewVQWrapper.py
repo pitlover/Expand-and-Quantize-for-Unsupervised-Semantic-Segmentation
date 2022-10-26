@@ -27,9 +27,8 @@ class DINONewVQWrapper(nn.Module):
         self.num_vq = self.model.num_vq
         self.recon_weight = cfg["loss"]["recon_weight"]
         self.vq_weight = cfg["loss"]["vq_weight"]
-        # self.contra_pos_weight = cfg["loss"]["contra_weight"].get("pos", 0.0)
-        # self.contra_neg_weight = cfg["loss"]["contra_weight"].get("neg", 0.0)
-        # self.stego_weight = cfg["loss"].get("stego_weight", 0.0)
+        self.info_nce_weight = cfg["loss"]["info_nce_weight"]
+        self.jsd_weight = cfg["loss"]["jsd_weight"]
         self.output_type = cfg["eval"]["output_type"]
         self.use_kmeans_sampling = cfg["model"]["vq"]["use_kmeans_sampling"]
 
@@ -57,13 +56,19 @@ class DINONewVQWrapper(nn.Module):
         b, _, H, W = img.shape
         output = dict()
         if not self.use_kmeans_sampling:
-            feat, feat_vqs, output = self.model(img)
+            feat, feat_vqs, output = self.model(img, aug_img)
             # feat: (b, 384, 28, 28)
             # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
             # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
 
             model_loss = output["recon-loss"] * self.recon_weight
             model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
+
+            if self.info_nce_weight > 0.0:
+                model_loss += (output["info_nce"] * self.info_nce_weight)
+
+            if self.jsd_weight > 0.0:
+                model_loss += (output["jsd"] * self.jsd_weight)
             output["loss"] = model_loss
 
         else:  # k-means sampling
@@ -71,6 +76,9 @@ class DINONewVQWrapper(nn.Module):
                 _, _, output = self.model(img, stage=1)
                 model_loss = output["recon-loss"] * self.recon_weight
                 model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
+
+                if self.info_nce_weight > 0.0:
+                    model_loss += (output["info_nce"] * self.info_nce_weight)
                 output["loss"] = model_loss
 
             with torch.no_grad():

@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_info1cos10_jsd0.1_ts1.0"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_info1cos10_jsdX_pqdropout"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -38,7 +38,7 @@ model:
     use_restart: false                        # default false, true
     use_weighted_sum: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
-
+    pq_dropout : 0.05                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
     num_pq: [ 32 ]                            # 1 for vq
@@ -51,7 +51,7 @@ loss:
   recon_weight: 1.0
   vq_weight: 1.0
   info_nce_weight : 1.0
-  jsd_weight : 0.1
+  jsd_weight : 1.0
   info_nce:
     normalize: "l2"
     neg_sample: 10                           # TODO need check

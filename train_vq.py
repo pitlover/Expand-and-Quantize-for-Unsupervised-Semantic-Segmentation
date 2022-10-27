@@ -78,7 +78,7 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, aug_img, label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -92,7 +92,6 @@ def train_epoch(
             for optim, sched in zip(optimizers, schedulers):
                 scaler.step(optim)
                 scaler.update()
-                # optim.step()
                 sched.step()
             step_time = time.time() - step_start_time
 
@@ -101,13 +100,13 @@ def train_epoch(
             with model.no_sync():
                 with torch.cuda.amp.autocast(enabled=True):
                     total_loss, output, _ = model(img, aug_img,
-                                                  label)  # total_loss, output, (linear_preds, cluster_preds)
+                                                  label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
                 scaler.scale(loss).backward()
         else:  # non-update step
             # and not DDP
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, aug_img, label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             scaler.scale(loss).backward()
@@ -228,7 +227,7 @@ def valid_epoch(
         img_path = data["img_path"]
         # -------------------------------- loss -------------------------------- #
         with torch.cuda.amp.autocast(enabled=True):
-            _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, is_crf=is_crf)
+            _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, it=it, is_crf=is_crf)
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 

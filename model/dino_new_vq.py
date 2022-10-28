@@ -14,7 +14,7 @@ from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
 import faiss
-from model.loss import InfoNCELoss, JSDLoss, JiLoss
+from model.loss import InfoNCELoss, JSDLoss, JiLoss, EntropyLoss
 
 
 @torch.no_grad()
@@ -43,8 +43,7 @@ class DINONewVq(nn.Module):
 
         self.extractor = DinoFeaturizer(cfg["pretrained"])
         self.feat_dim = self.extractor.n_feats  # 384
-        self.hidden_dim = cfg.get("hidden_dim", self.feat_dim)
-
+        self.hidden_dim = cfg["vq"]["embed_dims"][0]
         # -------- semantic-encoder -------- #
         num_enc_blocks = cfg["enc_num_blocks"]
         semantic_enc_proj = []
@@ -116,8 +115,8 @@ class DINONewVq(nn.Module):
                                         temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
                                         cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
                                         )
-        # self.jsd_loss = JiLoss()
         self.jsd_loss = JSDLoss()
+
 
     def forward(self, img: torch.Tensor, aug_img: torch.Tensor = None, it: int = 0, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
@@ -177,8 +176,8 @@ class DINONewVq(nn.Module):
             outputs["info_nce"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
 
             # JSD loss
-            top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
-            outputs["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
+            # top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
+            # outputs["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
 
             # split half
             feat = torch.chunk(feat, chunks=2, dim=0)[0]
@@ -226,7 +225,10 @@ class Codebook(nn.Module):
             self.z_log_var = nn.Parameter(torch.zeros(self.latent_dim))
         self.use_restart = use_restart
         self.need_initialized = need_initialized
+        # ----- JSD ------ #
+        self.jsd_loss = JSDLoss()
         self.jsd_ts = jsd_ts
+        self.entropy_loss = EntropyLoss()
 
     @torch.no_grad()
     def prepare_restart(self, vq_current_count: torch.Tensor, z_flat: torch.Tensor) -> None:
@@ -331,8 +333,7 @@ class Codebook(nn.Module):
         d = torch.sum(z_norm ** 2, dim=1, keepdim=True) + \
             torch.sum(codebook_norm ** 2, dim=1) - \
             2 * (torch.matmul(z_norm, codebook_norm.t()))  # (2bhw, n_prototypes)
-        print(d.shape)
-        exit()
+
         min_encoding_indices = torch.argmin(d, dim=1)
         distance_prob = F.softmax(-d / self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
         vq_indices = torch.argmin(d, dim=1)
@@ -379,14 +380,18 @@ class Codebook(nn.Module):
         z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
 
         output["vq-loss"] = q_loss
-        with torch.no_grad():
-            os.makedirs('./pq0_correlation_matrix', exist_ok=True)
-            if i == 0 and it % 5000 == 1:
-                # codebook_norm : (n_codebook, dim)
-                corr_matrix_i = torch.matmul(codebook_norm, codebook_norm.T)
-                torch.save(corr_matrix_i, f'./pq0_correlation_matrix/{it}.pt')
-                del corr_matrix_i
-                torch.cuda.empty_cache()
+        top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
+        # TODO jsd-loss check
+        output["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
+        output["entropy"] = self.entropy_loss(top_dis_prob_1, top_dis_prob_2)
+        # with torch.no_grad():
+        #     os.makedirs('./pq0_correlation_matrix/pq_mask_jsd0.1/512/', exist_ok=True)
+        #     if i == 0 and it % 2000 == 1:
+        #         # codebook_norm : (n_codebook, dim)
+        #         corr_matrix_i = torch.matmul(codebook_norm, codebook_norm.T)
+        #         torch.save(corr_matrix_i, f'./pq0_correlation_matrix/pq_mask_jsd0.1/512/{self.pq_dropout}_{it}.pt')
+        #         del corr_matrix_i
+        #         torch.cuda.empty_cache()
         return z_q, output, distance_prob
 
 
@@ -426,13 +431,13 @@ class ProductQuantizerWrapper(nn.Module):
     def forward(self, z: torch.Tensor, it: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
         # b, c, h, w = z.shape
         z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
-
         z_quantized = list()
         outputs = dict()
         distance_prob = list()
 
         for i in range(self.num_pq):
-            q_i, output_i, prob_i = self.quantizers[i](z_split[i], i, it=it)
+            q_i, output_i, prob_i = self.quantizers[i](z_split[i], i,
+                                                       it=it)  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
 
             z_quantized.append(q_i)
             if i == 0:
@@ -448,5 +453,6 @@ class ProductQuantizerWrapper(nn.Module):
         for k, v in outputs.items():
             outputs[k] /= self.num_pq
 
-        distance_prob = torch.cat(distance_prob, dim=-1)  # (n, K x #pq)
+        distance_prob = torch.cat(distance_prob, dim=-1)  # (2bhw, n_prototypes x #pq)
+
         return z_quantized, outputs, distance_prob

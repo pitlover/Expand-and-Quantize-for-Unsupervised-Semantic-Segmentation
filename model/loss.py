@@ -374,6 +374,24 @@ class CLUBLoss(nn.Module):
         # return loss
 
 
+class EntropyLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, p: torch.Tensor, q: torch.Tensor) -> torch.Tensor:
+        '''
+
+        :param p:
+        :param q:
+        :return:
+        '''
+        # TODO check only for ori?
+        avg_p = p.mean(0)
+        avg_entropy = -avg_p * torch.log(avg_p + 1e-8)
+        avg_entropy = torch.sum(avg_entropy, dim=-1)
+        return -avg_entropy
+
+
 class JSDLoss(nn.Module):
     def __init__(self, reduction="batchmean"):
         super().__init__()

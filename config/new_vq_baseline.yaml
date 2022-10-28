@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_info1cos10_jsdX_pqdropout"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_info10"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -10,7 +10,7 @@ seed: 10
 num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
-is_visualize: true                           # default false
+is_visualize: false                           # default false
 visualize_path: "./visualize/new_vq_info"
 # ---------------------------------------------------------------- #
 resume:
@@ -27,21 +27,20 @@ model:
     dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
-  hidden_dim: 1024
   last_norm: false
   vq:
     vq_type: "param"                          # ema, param
-    num_codebooks: [ 512 ]
-    embed_dims: [ 1024 ]
+    num_codebooks: [ 512 ] # 512
+    embed_dims: [ 2048 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
     use_weighted_sum: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
-    pq_dropout : 0.05                         # defulat(ratio of pq mask) : 0.0,
+    pq_dropout : 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 32 ]                            # 1 for vq
+    num_pq: [ 64 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -50,8 +49,8 @@ model:
 loss:
   recon_weight: 1.0
   vq_weight: 1.0
-  info_nce_weight : 1.0
-  jsd_weight : 1.0
+  info_nce_weight : 10.0
+  jsd_weight : 0.0
   info_nce:
     normalize: "l2"
     neg_sample: 10                           # TODO need check
@@ -59,6 +58,7 @@ loss:
     cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
   jsd:
     temperature : 1.0
+    entropy_weight : 0.0
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -77,7 +77,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 32  # total
+    batch_size: 16  # total
     num_workers: 8  # total
   val:
     batch_size: 16  # total
@@ -112,7 +112,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 5
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0

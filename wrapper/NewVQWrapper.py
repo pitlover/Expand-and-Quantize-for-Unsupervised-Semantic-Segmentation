@@ -23,12 +23,16 @@ class DINONewVQWrapper(nn.Module):
 
         self.num_classes = cfg["num_classes"]
         self.extra_classes = cfg["eval"]["extra_classes"]
-
         self.num_vq = self.model.num_vq
+        # -------- Loss weight --------- #
         self.recon_weight = cfg["loss"]["recon_weight"]
         self.vq_weight = cfg["loss"]["vq_weight"]
         self.info_nce_weight = cfg["loss"]["info_nce_weight"]
         self.jsd_weight = cfg["loss"]["jsd_weight"]
+        self.entropy_weight = 0.0
+        if self.jsd_weight > 0.0:
+            self.entropy_weight = cfg["loss"]["jsd"]["entropy_weight"]
+
         self.output_type = cfg["eval"]["output_type"]
         self.use_kmeans_sampling = cfg["model"]["vq"]["use_kmeans_sampling"]
 
@@ -50,7 +54,7 @@ class DINONewVQWrapper(nn.Module):
                 img: torch.Tensor,
                 aug_img: torch.Tensor,
                 label: torch.Tensor,
-                it : int,
+                it: int,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
         model_loss = torch.zeros(1, device=img.device)
@@ -70,6 +74,9 @@ class DINONewVQWrapper(nn.Module):
 
             if self.jsd_weight > 0.0:
                 model_loss = model_loss + (output["jsd"] * self.jsd_weight)
+
+                if self.entropy_weight > 0.0:
+                    model_loss += (output["entropy"] * self.entropy_weight)
             output["loss"] = model_loss
 
         else:  # k-means sampling
@@ -80,6 +87,9 @@ class DINONewVQWrapper(nn.Module):
 
                 if self.info_nce_weight > 0.0:
                     model_loss += (output["info_nce"] * self.info_nce_weight)
+
+                    if self.entropy_weight > 0.0:
+                        model_loss += (output["entropy"] * self.entropy_weight)
                 output["loss"] = model_loss
 
             with torch.no_grad():

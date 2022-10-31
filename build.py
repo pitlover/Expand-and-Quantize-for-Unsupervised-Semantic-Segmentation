@@ -191,8 +191,8 @@ def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> D
         world_size = get_world_size()
         loader = DataLoader(
             dataset,
-            batch_size=max(cfg["batch_size"] // world_size, 1),
-            # batch_size=max(cfg["batch_size"] // world_size, 1) if "train" in mode else 1,
+            # batch_size=max(cfg["batch_size"] // world_size, 1),
+            batch_size=max(cfg["batch_size"] // world_size, 1) if "train" in mode else 1,
             num_workers=max((cfg["num_workers"] + world_size - 1) // world_size, 1),
             pin_memory=True,
             sampler=ddp_sampler

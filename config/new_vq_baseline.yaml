@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_infoX_jsdX_revised"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_infoX_jsdX_restart_rand"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -10,8 +10,8 @@ seed: 10
 num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
-is_visualize: false                           # default false
-visualize_path: "./visualize/new_vq_info"
+is_visualize: true                           # default false, true
+visualize_path: "./visualize/rand_restart"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null                            # default null
@@ -34,9 +34,9 @@ model:
     embed_dims: [ 2048 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
-    use_restart: false                        # default false, true
+    use_restart: true                        # default false, true
     use_weighted_sum: false                   # default false, true
-    need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
+    need_initialized: "rand"                   # default none : kmeans, uni, normal, rand
     pq_dropout : 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5

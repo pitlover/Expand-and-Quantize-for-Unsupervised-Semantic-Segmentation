@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_info10"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_infoX_jsd1"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -14,7 +14,7 @@ is_visualize: false                           # default false
 visualize_path: "./visualize/new_vq_info"
 # ---------------------------------------------------------------- #
 resume:
-  checkpoint: null
+  checkpoint: null                            # default null
 
 # ---------------------------------------------------------------- #
 model:
@@ -40,7 +40,7 @@ model:
     pq_dropout : 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 64 ]             # 64               # 1 for vq
+    num_pq: [ 32 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -49,7 +49,7 @@ model:
 loss:
   recon_weight: 1.0
   vq_weight: 1.0
-  info_nce_weight : 10.0
+  info_nce_weight : 0.0
   jsd_weight : 0.0
   info_nce:
     normalize: "l2"
@@ -112,7 +112,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 5
+  max_epochs: 3
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 1.0

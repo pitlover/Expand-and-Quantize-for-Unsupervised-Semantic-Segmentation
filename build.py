@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.optim import SGD, Adam, AdamW
-from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR, SequentialLR
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -25,6 +25,7 @@ from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
 from wrapper.NewVQWrapper import DINONewVQWrapper
+
 
 # from wrapper.ClusterWrapper_kmeans import ClusterWrapper
 
@@ -128,25 +129,8 @@ def build_scheduler(cfg: dict,
                                       last_epoch=-1)
     else:
         raise ValueError(f"Unsupported scheduler type {scheduler_type}.")
-    return scheduler
 
-    # warmup_cfg = cfg["warmup"]
-    # warmup = LinearLR(
-    #     optimizer,
-    #     start_factor=warmup_cfg["start_factor"], end_factor=1.0,
-    #     total_iters=warmup_cfg["epochs"] * iter_per_epoch,
-    # )
-    # decay_cfg = cfg["decay"]
-    # decay = CosineAnnealingLR(
-    #     optimizer,
-    #     T_max=decay_cfg["epochs"] * iter_per_epoch,
-    #     eta_min=decay_cfg["min_lr"],
-    # )
-    # scheduler = SequentialLR(
-    #     optimizer,
-    #     schedulers=[warmup, decay],
-    #     milestones=[warmup_cfg["epochs"] * iter_per_epoch]
-    # )
+    return scheduler
 
 
 def build_dataset(cfg: dict, mode: str = "train") -> UnSegDataset:
@@ -191,8 +175,8 @@ def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> D
         world_size = get_world_size()
         loader = DataLoader(
             dataset,
-            # batch_size=max(cfg["batch_size"] // world_size, 1),
-            batch_size=max(cfg["batch_size"] // world_size, 1) if "train" in mode else 1,
+            batch_size=max(cfg["batch_size"] // world_size, 1),
+            # batch_size=max(cfg["batch_size"] // world_size, 1) if "train" in mode else 1,
             num_workers=max((cfg["num_workers"] + world_size - 1) // world_size, 1),
             pin_memory=True,
             sampler=ddp_sampler

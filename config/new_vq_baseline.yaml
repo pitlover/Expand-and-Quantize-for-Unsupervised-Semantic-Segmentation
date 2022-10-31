@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_infoX_jsd1_revised_dec"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_infoX_jsdX_enc3"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -25,7 +25,7 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: false
-  enc_num_blocks: 1
+  enc_num_blocks: 3
   dec_num_blocks: 3
   last_norm: false
   vq:

@@ -45,11 +45,12 @@ class DINONewVq(nn.Module):
         self.feat_dim = self.extractor.n_feats  # 384
         self.hidden_dim = cfg["vq"]["embed_dims"][0]
         # -------- semantic-encoder -------- #
-        num_enc_blocks = cfg["enc_num_blocks"]
-        semantic_enc_proj = []
-        for i in range(num_enc_blocks):
-            semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
-        self.enc_proj = nn.Sequential(*semantic_enc_proj)
+        # num_enc_blocks = cfg["enc_num_blocks"]
+        # semantic_enc_proj = []
+        # for i in range(num_enc_blocks):
+        #     semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
+        # self.enc_proj = nn.Sequential(*semantic_enc_proj)
+        self.enc_proj = nn.Conv2d(self.feat_dim, self.hidden_dim, (1, 1))
 
         # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
@@ -117,7 +118,6 @@ class DINONewVq(nn.Module):
                                         )
         self.jsd_loss = JSDLoss()
 
-
     def forward(self, img: torch.Tensor, aug_img: torch.Tensor = None, it: int = 0, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
         # photometric aug
@@ -160,8 +160,8 @@ class DINONewVq(nn.Module):
             # dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
             # dino_feat = dino_feat.view(-1, d)  # (bhw, d)
 
-            feat = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
-
+            # feat = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
+            feat = self.enc_proj(dino_feat)
             quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat, it=it)  # (2b, hidden_dim, h, w)
 
             recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)

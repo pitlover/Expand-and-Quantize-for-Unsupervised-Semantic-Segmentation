@@ -109,7 +109,8 @@ class DINONewVq(nn.Module):
         for i in range(num_dec_blocks):
             dec_proj.append(
                 # DecResBlock(self.feat_dim, self.feat_dim))
-                DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim)) # TODO check
+                DecResBlock(self.hidden_dim,
+                            self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
         self.dec_proj = nn.Sequential(*dec_proj)
         # -------- loss -------- #
         self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
@@ -340,6 +341,9 @@ class Codebook(nn.Module):
         min_encoding_indices = torch.argmin(d, dim=1)
         distance_prob = F.softmax(-d / self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
         vq_indices = torch.argmin(d, dim=1)
+        # top1 = torch.max(distance_prob, dim=1)
+        # avg_top1 = torch.mean(top1.values)
+        # print(avg_top1)
 
         if self.use_weighted_sum:
             z_q = torch.matmul(distance_prob, codebook_norm)  # TODO check temperature scaling
@@ -430,7 +434,6 @@ class ProductQuantizerWrapper(nn.Module):
                           jsd_ts=jsd_ts)
             for _ in range(self.num_pq)
         ])
-
 
     def forward(self, z: torch.Tensor, it: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
         # b, c, h, w = z.shape

@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_infoX_jsdX_skipconnectionX"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*64_bs16_infoX_jsdX_revised"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #

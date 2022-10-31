@@ -85,15 +85,15 @@ class DecResBlock(nn.Module):
         self.in_channel = in_channel
         self.out_channel = out_channel
 
-        self.norm1 = nn.BatchNorm2d(in_channel)
+        # self.norm1 = nn.BatchNorm2d(in_channel)
         # self.norm1 = nn.GroupNorm(num_groups=16, num_channels=in_channel)
         # self.norm1 = LayerNorm2d(in_channel)
-        # self.norm1 = nn.Identity()
+        self.norm1 = nn.Identity()
 
         # self.act1 = nn.ReLU(inplace=True)
-        self.act1 = nn.LeakyReLU(0.1, inplace=True)
-        # self.act1 = nn.Identity()
-
+        # self.act1 = nn.LeakyReLU(0.1, inplace=True)
+        self.act1 = nn.Identity()
+        #
         # self.conv1 = nn.Conv2d(in_channel, in_channel, 3, 1, 1, bias=False)
         self.conv1 = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
         # self.conv1 = nn.Linear(in_channel, out_channel)

@@ -45,12 +45,12 @@ class DINONewVq(nn.Module):
         self.feat_dim = self.extractor.n_feats  # 384
         self.hidden_dim = cfg["vq"]["embed_dims"][0]
         # -------- semantic-encoder -------- #
-        # num_enc_blocks = cfg["enc_num_blocks"]
-        # semantic_enc_proj = []
-        # for i in range(num_enc_blocks):
-        #     semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
-        # self.enc_proj = nn.Sequential(*semantic_enc_proj)
-        self.enc_proj = nn.Conv2d(self.feat_dim, self.hidden_dim, (1, 1))
+        num_enc_blocks = cfg["enc_num_blocks"]
+        semantic_enc_proj = []
+        for i in range(num_enc_blocks):
+            semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
+        self.enc_proj = nn.Sequential(*semantic_enc_proj)
+        # self.enc_proj = nn.Conv2d(self.feat_dim, self.hidden_dim, (1, 1)) # TODO check
 
         # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
@@ -108,7 +108,8 @@ class DINONewVq(nn.Module):
         dec_proj = []
         for i in range(num_dec_blocks):
             dec_proj.append(
-                DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))
+                # DecResBlock(self.feat_dim, self.feat_dim))
+                DecResBlock(self.hidden_dim, self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim)) # TODO check
         self.dec_proj = nn.Sequential(*dec_proj)
         # -------- loss -------- #
         self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
@@ -117,6 +118,9 @@ class DINONewVq(nn.Module):
                                         cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
                                         )
         self.jsd_loss = JSDLoss()
+
+        # -------- final-linear -------- #
+        # self.final_conv = nn.Conv2d(self.hidden_dim, self.feat_dim, (1, 1)) # TODO check
 
     def forward(self, img: torch.Tensor, aug_img: torch.Tensor = None, it: int = 0, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
@@ -160,9 +164,9 @@ class DINONewVq(nn.Module):
             # dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
             # dino_feat = dino_feat.view(-1, d)  # (bhw, d)
 
-            # feat = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
-            feat = self.enc_proj(dino_feat)
+            feat = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
             quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat, it=it)  # (2b, hidden_dim, h, w)
+            # quantized_feat = self.final_conv(quantized_feat)  # TODO check (2b, feat_dim, h, w)
 
             recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
             recon_loss = F.mse_loss(recon, dino_feat)
@@ -182,7 +186,6 @@ class DINONewVq(nn.Module):
             # split half
             feat = torch.chunk(feat, chunks=2, dim=0)[0]
             quantized_feat = torch.chunk(quantized_feat, chunks=2, dim=0)[0]
-
         return feat, quantized_feat, outputs
 
 
@@ -428,6 +431,7 @@ class ProductQuantizerWrapper(nn.Module):
             for _ in range(self.num_pq)
         ])
 
+
     def forward(self, z: torch.Tensor, it: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
         # b, c, h, w = z.shape
         z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
@@ -438,7 +442,6 @@ class ProductQuantizerWrapper(nn.Module):
         for i in range(self.num_pq):
             q_i, output_i, prob_i = self.quantizers[i](z_split[i], i,
                                                        it=it)  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
-
             z_quantized.append(q_i)
             if i == 0:
                 for k, v in output_i.items():
@@ -449,7 +452,6 @@ class ProductQuantizerWrapper(nn.Module):
             distance_prob.append(prob_i)  # (2bhw, n_prototypes)
 
         z_quantized = torch.cat(z_quantized, dim=1)
-
         for k, v in outputs.items():
             outputs[k] /= self.num_pq
 

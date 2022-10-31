@@ -48,17 +48,17 @@ class EncResBlock(nn.Module):
         self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=True)
         # self.conv2 = nn.Linear(out_channel, out_channel)
 
-        if in_channel != out_channel:
-            # self.norm_shortcut = nn.BatchNorm2d(in_channel)
-            # self.norm_shortcut = nn.GroupNorm(num_groups=16, num_channels=in_channel)
-            # self.norm_shortcut = LayerNorm2d(in_channel)
-            self.norm_shortcut = nn.Identity()
-            self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
-            # self.conv_shortcut = nn.Linear(in_channel, out_channel)
-
-        else:
-            self.norm_shortcut = None
-            self.conv_shortcut = None
+        # if in_channel != out_channel:
+        #     # self.norm_shortcut = nn.BatchNorm2d(in_channel)
+        #     # self.norm_shortcut = nn.GroupNorm(num_groups=16, num_channels=in_channel)
+        #     # self.norm_shortcut = LayerNorm2d(in_channel)
+        #     self.norm_shortcut = nn.Identity()
+        #     self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
+        #     # self.conv_shortcut = nn.Linear(in_channel, out_channel)
+        #
+        # else:
+        #     self.norm_shortcut = None
+        #     self.conv_shortcut = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         identity = x  # (b, c, h, w)
@@ -70,10 +70,10 @@ class EncResBlock(nn.Module):
         x = self.act2(x)
         x = self.conv2(x)
 
-        if self.conv_shortcut is not None:
-            identity = self.norm_shortcut(identity)
-            identity = self.conv_shortcut(identity)
-        x = x + identity
+        # if self.conv_shortcut is not None:
+        #     identity = self.norm_shortcut(identity)
+        #     identity = self.conv_shortcut(identity)
+        # x = x + identity
 
         return x
 
@@ -110,20 +110,20 @@ class DecResBlock(nn.Module):
         self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=True)
         # self.conv2 = nn.Linear(out_channel, out_channel)
 
-        if in_channel != out_channel:
-            self.norm_shortcut = nn.BatchNorm2d(in_channel)
-            # self.norm_shortcut = nn.GroupNorm(num_groups=16, num_channels=in_channel)
-            # self.norm_shortcut = LayerNorm2d(in_channel)
-            # self.norm_shortcut = nn.Identity()
-
-            # self.act_shortcut = nn.ReLU(inplace=True)  # TODO check
-            self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
-            # self.conv_shortcut = nn.Linear(in_channel, out_channel)
-            # self.conv_shortcut = nn.Identity()
-        else:
-            self.norm_shortcut = None
-            self.conv_shortcut = None
-            self.act_shortcut = None
+        # if in_channel != out_channel:
+        #     self.norm_shortcut = nn.BatchNorm2d(in_channel)
+        #     # self.norm_shortcut = nn.GroupNorm(num_groups=16, num_channels=in_channel)
+        #     # self.norm_shortcut = LayerNorm2d(in_channel)
+        #     # self.norm_shortcut = nn.Identity()
+        #
+        #     # self.act_shortcut = nn.ReLU(inplace=True)  # TODO check
+        #     self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
+        #     # self.conv_shortcut = nn.Linear(in_channel, out_channel)
+        #     # self.conv_shortcut = nn.Identity()
+        # else:
+        #     self.norm_shortcut = None
+        #     self.conv_shortcut = None
+        #     self.act_shortcut = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         identity = x  # (b, c, h, w)
@@ -135,11 +135,11 @@ class DecResBlock(nn.Module):
         x = self.act2(x)
         x = self.conv2(x)
 
-        if self.conv_shortcut is not None:
-            identity = self.norm_shortcut(identity)
-            identity = self.conv_shortcut(identity)
-
-        x = x + identity
+        # if self.conv_shortcut is not None:
+        #     identity = self.norm_shortcut(identity)
+        #     identity = self.conv_shortcut(identity)
+        #
+        # x = x + identity
         return x
 
 
@@ -148,11 +148,11 @@ class ResBlock(nn.Module):
         super().__init__()
 
         self.conv = nn.Sequential(
-            nn.ReLU(inplace=True),
-            # nn.LeakyReLU(0.1, inplace=True),
+            # nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.1, inplace=True),
             nn.Conv2d(in_channel, channel, 3, padding=1),
-            nn.ReLU(inplace=True),
-            # nn.LeakyReLU(0.1, inplace=True),
+            # nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.1, inplace=True),
             nn.Conv2d(channel, in_channel, 1),
         )
 

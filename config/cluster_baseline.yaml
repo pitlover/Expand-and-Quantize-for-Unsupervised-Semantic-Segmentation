@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "CLUSTER_pos1.0_kmeans_cosine100_lr5.7_tp0.7_clslr5.3_lilr5.3"
+  name: "CLUSTER_margin1"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -10,7 +10,8 @@ seed: 10
 num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
-
+is_visualize: false                           # default false, true
+visualize_path: "./visualize/jsd1.0/"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null
@@ -35,8 +36,8 @@ model:
 
 # ---------------------------------------------------------------- #
 loss:
-  info_nce_weight: 1.0
-
+  info_nce_weight: 0.0
+  margin_weight : 0.1
   info_nce:
     neg_sample: 100
     temperature: 0.7
@@ -60,24 +61,24 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 64  # total
+    batch_size: 32  # total
     num_workers: 8  # total
   val:
-    batch_size: 32  # total
+    batch_size: 16  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
   model:
     name: "adamw"
-    lr: 5.0e-7
-    weight_decay: 1e-4
+    lr: 3.0e-4
+    weight_decay: 0
   cluster:
     name: "adam"
-    lr: 5.0e-3
+    lr: 3.0e-3
   linear:
     name: "adam"
-    lr: 1.0e-3
+    lr: 3.0e-3
 
 # ---------------------------------------------------------------- #
 scheduler:
@@ -94,8 +95,8 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 3
   print_interval_iters: 25
-  valid_interval_iters: 25
+  valid_interval_iters: 100
   clip_grad: 1.0
   num_accum: 1

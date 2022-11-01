@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 
 from model.blocks.resnet import EncResBlock
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.loss import InfoNCELoss, ClusterLoss
+from model.loss import InfoNCELoss, ClusterLoss, MarginRankingLoss
 
 import numpy as np
 from sklearn.manifold import TSNE
@@ -34,6 +34,7 @@ class DINOCluster(nn.Module):
             semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.semantic_dim, self.semantic_dim))
         self.semantic_enc_proj = nn.Sequential(*semantic_enc_proj)
 
+        '''
         # -------- prototype -------- #
         self.queue = None  # placeholder
         self.queue_first_time = True
@@ -48,6 +49,9 @@ class DINOCluster(nn.Module):
         self.cluster_loss = ClusterLoss(temperature=self.cfg_loss["cluster"].get("temperature", 1.0),
                                         eps=self.cfg_loss["cluster"].get("eps", 0.001),
                                         world_size=world_size)
+        '''
+
+        self.margin_loss = MarginRankingLoss()
         # -------- t-sne -------- #
         self.iteration = 0
         self.tsne = cfg.get("tsne", False)
@@ -96,8 +100,8 @@ class DINOCluster(nn.Module):
         random.seed(seed)  # apply this seed to img transforms
         torch.manual_seed(seed)  # needed for torchvision 0.7
 
-    def forward(self, img: torch.Tensor, aug_img : torch.Tensor, queue: torch.Tensor = None
-                ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
+    def forward(self, img: torch.Tensor, aug_img: torch.Tensor) -> Tuple[
+        torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         img_aug_1 = img  # (b, 3, h, w)
         img_aug_2 = aug_img  # (b, 3, h, w)
         # img_aug_2 = self._photometric_aug(img)  # (b, 3, h, w)
@@ -116,46 +120,47 @@ class DINOCluster(nn.Module):
 
         semantic_feat_img1, semantic_feat_img2 = torch.chunk(semantic_feat, chunks=2, dim=0)  # (b, hidden_d, h, w)
 
-        flat_semantic_feat = semantic_feat.permute(0, 2, 3, 1).contiguous()
-        flat_semantic_feat = flat_semantic_feat.view(-1, semantic_feat.shape[1])
+        output["margin"] = self.margin_loss(semantic_feat_img1, semantic_feat_img2)
+        # flat_semantic_feat = semantic_feat.permute(0, 2, 3, 1).contiguous()
+        # flat_semantic_feat = flat_semantic_feat.view(-1, semantic_feat.shape[1])
+        #
+        # normalized_semantic_feat = F.normalize(flat_semantic_feat, dim=1, p=2)  # TODO is it right ?
+        #
+        # # normalize the prototypes
+        # with torch.no_grad():
+        #     w = self.prototypes.weight.data.clone()
+        #     w = F.normalize(w, dim=1, p=2)
+        #     self.prototypes.weight.copy_(w)
+        #
+        # out_prototypes = self.prototypes(normalized_semantic_feat)
+        #
+        # if self.training and queue is not None:
+        #     if self.queue_first_time:
+        #         self.queue = queue
+        #         self.queue_first_time = False
+        #
+        # output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+        # output["swav-loss"], queue = self.cluster_loss(normalized_semantic_feat,
+        #                                                out_prototypes,
+        #                                                self.prototypes.weight,
+        #                                                self.queue)
+        # if self.training:  # update queue only for training
+        #     self.queue = queue
+        #     '''
+        #     T-SNE visualization
+        #     '''
+        #     if self.tsne and self.iteration % 1000 == 0:
+        #         # ------------------------- #
+        #         flat_ori_feat = semantic_feat_img1.permute(0, 2, 3, 1).contiguous().view(-1,
+        #                                                                                  semantic_feat_img1.shape[1])
+        #         cpu_flat_ori_feat = flat_ori_feat.clone().detach().cpu().numpy()  # (bhw, d)
+        #         tsne_np1 = TSNE(n_components=2)
+        #         semantic_np = tsne_np1.fit_transform(cpu_flat_ori_feat)
+        #
+        #         plt.figure(figsize=(10, 10))
+        #         plt.scatter(semantic_np[:, 0], semantic_np[:, 1])
+        #         plt.savefig(f'./plot/swav_semantic/swav_semantic_{self.iteration}.png')
+        #
+        #     self.iteration += 1
 
-        normalized_semantic_feat = F.normalize(flat_semantic_feat, dim=1, p=2)  # TODO is it right ?
-
-        # normalize the prototypes
-        with torch.no_grad():
-            w = self.prototypes.weight.data.clone()
-            w = F.normalize(w, dim=1, p=2)
-            self.prototypes.weight.copy_(w)
-
-        out_prototypes = self.prototypes(normalized_semantic_feat)
-
-        if self.training and queue is not None:
-            if self.queue_first_time:
-                self.queue = queue
-                self.queue_first_time = False
-
-        output["contra-loss-pos"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
-        output["swav-loss"], queue = self.cluster_loss(normalized_semantic_feat,
-                                                       out_prototypes,
-                                                       self.prototypes.weight,
-                                                       self.queue)
-        if self.training:  # update queue only for training
-            self.queue = queue
-            '''
-            T-SNE visualization
-            '''
-            if self.tsne and self.iteration % 1000 == 0:
-                # ------------------------- #
-                flat_ori_feat = semantic_feat_img1.permute(0, 2, 3, 1).contiguous().view(-1,
-                                                                                         semantic_feat_img1.shape[1])
-                cpu_flat_ori_feat = flat_ori_feat.clone().detach().cpu().numpy()  # (bhw, d)
-                tsne_np1 = TSNE(n_components=2)
-                semantic_np = tsne_np1.fit_transform(cpu_flat_ori_feat)
-
-                plt.figure(figsize=(10, 10))
-                plt.scatter(semantic_np[:, 0], semantic_np[:, 1])
-                plt.savefig(f'./plot/swav_semantic/swav_semantic_{self.iteration}.png')
-
-            self.iteration += 1
-
-        return dino_feat, semantic_feat_img1, out_prototypes, output
+        return dino_feat, semantic_feat_img1, None, output

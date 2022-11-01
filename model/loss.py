@@ -51,22 +51,24 @@ class MarginRankingLoss(nn.Module):
         b, d, h, w = ori.shape
         self.d = d
         self.device = ori.device
-        loss = 0
 
         ori_corr = self.corr_matrix(ori)  # (hw, hw)
         aug_corr = self.corr_matrix(aug)  # (hw, hw)
+        #
+        # loss = ori_corr - aug_corr
+        # loss = torch.mean(loss)
 
-        loss = ori_corr - aug_corr
-        mask = (loss > 0.1).float()
-        loss *= mask
-        loss = torch.sum(loss) / max(1, torch.sum(mask))
-        # rank_input1 = ori_corr  # (hw, )
-        # rank_input2 = torch.roll(rank_input1, 1, 1)  # (hw, )
-        # rank_target, rank_margin = self.get_target_margin(aug_corr)
-        # rank_target_nonzero = rank_target.clone()
-        # rank_target_nonzero[rank_target_nonzero == 0] = 1
-        # rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
-        # loss += self.marginloss(rank_input1, rank_input2, rank_target)
+        # mask = (loss > 0.1).float()
+        # loss *= mask
+        # loss = torch.sum(loss) / max(1, torch.sum(mask))
+
+        rank_input1 = ori_corr  # (hw, )
+        rank_input2 = torch.roll(rank_input1, 1, 1)  # (hw, )
+        rank_target, rank_margin = self.get_target_margin(aug_corr)
+        rank_target_nonzero = rank_target.clone()
+        rank_target_nonzero[rank_target_nonzero == 0] = 1
+        rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
+        loss = self.marginloss(rank_input1, rank_input2, rank_target)
 
         # for i in range(b):
         #     ori_corr = self.corr_matrix(ori[i])  # (hw, hw)
@@ -89,7 +91,7 @@ class MarginRankingLoss(nn.Module):
         #     rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
         #     loss += self.marginloss(rank_input1, rank_input2, rank_target)
 
-        # loss = torch.mean(loss)
+        loss = torch.mean(loss)
         # loss = loss / (b)
         # loss = loss / (b * h * w)
         return loss

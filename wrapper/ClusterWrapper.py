@@ -26,6 +26,8 @@ class ClusterWrapper(nn.Module):
 
         self.contra_pos_weight = cfg["loss"].get("info_nce_weight", 0.0)
         self.cluster_weight = cfg["loss"].get("swav_weight", 0.0)
+        self.margin_weight = cfg["loss"]["margin_weight"]
+
         self.output_dim = cfg["model"]["hidden_dim"]
 
         self.evaluator = UnSegEvaluator(
@@ -49,6 +51,8 @@ class ClusterWrapper(nn.Module):
                 model_loss += (output["contra-loss-pos"] * self.contra_pos_weight)
             if self.cluster_weight > 0.0:
                 model_loss += (output["swav-loss"] * self.cluster_weight)
+            if self.margin_weight > 0.0:
+                model_loss = model_loss + (output["margin"] * self.margin_weight)
 
         output["loss"] = model_loss
 

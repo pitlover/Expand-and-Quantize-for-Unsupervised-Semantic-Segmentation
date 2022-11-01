@@ -29,6 +29,7 @@ class DINONewVQWrapper(nn.Module):
         self.vq_weight = cfg["loss"]["vq_weight"]
         self.info_nce_weight = cfg["loss"]["info_nce_weight"]
         self.jsd_weight = cfg["loss"]["jsd_weight"]
+        self.margin_weight = cfg["loss"]["margin_weight"]
         self.entropy_weight = 0.0
         if self.jsd_weight > 0.0:
             self.entropy_weight = cfg["loss"]["jsd"]["entropy_weight"]
@@ -77,6 +78,9 @@ class DINONewVQWrapper(nn.Module):
 
                 if self.entropy_weight > 0.0:
                     model_loss += (output["entropy"] * self.entropy_weight)
+            if self.margin_weight > 0.0:
+                model_loss = model_loss + (output["margin"] * self.margin_weight)
+
             output["loss"] = model_loss
 
         else:  # k-means sampling

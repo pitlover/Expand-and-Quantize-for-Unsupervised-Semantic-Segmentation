@@ -78,7 +78,8 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, aug_img, label,
+                                              it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -106,7 +107,8 @@ def train_epoch(
         else:  # non-update step
             # and not DDP
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img, aug_img, label,
+                                              it=it)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             scaler.scale(loss).backward()
@@ -238,7 +240,7 @@ def valid_epoch(
                 result[k] += v
         count += 1
 
-        if cfg["is_visualize"] and (current_iter % 2500 == 1 or current_iter % 13600 == 1):
+        if cfg["is_visualize"] and (current_iter % 2500 == 1):
             os.makedirs(cfg["visualize_path"], exist_ok=True)
             saved_data["img_path"].append("".join(img_path))
             saved_data["cluster_preds"].append(cluster_preds.cpu().squeeze(0))
@@ -246,10 +248,10 @@ def valid_epoch(
             saved_data["label"].append(label.cpu().squeeze(0))
 
     barrier()
-    cluster_result = cluster_m.compute()  # {iou, accuracy}
-    linear_result = linear_m.compute()  # {iou, accuracy}
+    cluster_result = cluster_m.compute(current_iter, stage="cluster")  # {iou, accuracy}
+    linear_result = linear_m.compute(current_iter, stage="linear")  # {iou, accuracy}
 
-    if cfg["is_visualize"] and (current_iter % 2500 == 1 or current_iter % 13600 == 1):
+    if cfg["is_visualize"] and (current_iter % 2500 == 1):
         visualization(cfg["visualize_path"] + "/" + str(current_iter), cfg["dataset_name"], saved_data, cluster_m)
 
     barrier()

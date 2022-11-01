@@ -14,7 +14,7 @@ from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
 import faiss
-from model.loss import InfoNCELoss, JSDLoss, JiLoss, EntropyLoss
+from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss
 
 
 @torch.no_grad()
@@ -99,7 +99,6 @@ class DINONewVq(nn.Module):
                 for i in range(self.num_vq)
             ]
             self.vq_blocks = nn.ModuleList(vq_blocks)
-            # self.codebook = Codebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
         else:
             raise ValueError(f"Unsupported vq type {self.vq_type}.")
 
@@ -119,9 +118,9 @@ class DINONewVq(nn.Module):
                                         cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
                                         )
         self.jsd_loss = JSDLoss()
+        self.margin_loss = MarginRankingLoss()
 
         # -------- final-linear -------- #
-        # self.final_conv = nn.Conv2d(self.hidden_dim, self.feat_dim, (1, 1)) # TODO check
 
     def forward(self, img: torch.Tensor, aug_img: torch.Tensor = None, it: int = 0, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
@@ -179,10 +178,7 @@ class DINONewVq(nn.Module):
             # MI loss
             semantic_feat_img1, semantic_feat_img2 = torch.chunk(feat, chunks=2, dim=0)  # (b, hidden_dim, h, w)
             outputs["info_nce"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
-
-            # JSD loss
-            # top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
-            # outputs["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
+            outputs["margin"] = self.margin_loss(semantic_feat_img1, semantic_feat_img2)
 
             # split half
             feat = torch.chunk(feat, chunks=2, dim=0)[0]

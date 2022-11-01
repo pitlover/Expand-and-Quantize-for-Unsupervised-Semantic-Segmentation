@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_info1_jsdX_neg10"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_infoX_roughmask"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -11,7 +11,7 @@ num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
 is_visualize: false                           # default false, true
-visualize_path: "./visualize/rand_restart"
+visualize_path: "./visualize/jsd1.0/"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null                            # default null
@@ -37,7 +37,7 @@ model:
     use_restart: false                        # default false, true
     use_weighted_sum: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
-    pq_dropout : 0.0                         # defulat(ratio of pq mask) : 0.0,
+    pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
     num_pq: [ 32 ]             # 64               # 1 for vq
@@ -49,16 +49,20 @@ model:
 loss:
   recon_weight: 1.0
   vq_weight: 1.0
-  info_nce_weight : 1.0
-  jsd_weight : 0.0
+  info_nce_weight: 0.0
+  jsd_weight: 0.0
+  margin_weight : 10.0
+
   info_nce:
     normalize: "l2"
     neg_sample: 10                           # TODO need check
     temperature: 1.0                          # TODO need check
     cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
   jsd:
-    temperature : 1.0
-    entropy_weight : 0.0
+    temperature: 1.0
+    entropy_weight: 0.0
+  margin :
+
 # ---------------------------------------------------------------- #
 dataset:
   train:
@@ -91,10 +95,10 @@ optimizer:
     weight_decay: 0.0
   cluster:
     name: "adam"
-    lr: 1.0e-3
+    lr: 3.0e-3
   linear:
     name: "adam"
-    lr: 1.0e-3
+    lr: 3.0e-3
 
 # ---------------------------------------------------------------- #
 scheduler:

@@ -1,9 +1,10 @@
-from typing import Tuple
+from typing import Tuple, List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics.functional import pairwise_cosine_similarity
 from utils.dist_utils import all_reduce_tensor
+import numpy as np
 
 
 def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
@@ -27,17 +28,88 @@ def distance(x: torch.Tensor, b: torch.Tensor, num_neg: int) -> torch.Tensor:
     return neg
 
 
-class JiLoss(nn.Module):
+class MarginRankingLoss(nn.Module):
     def __init__(self):
         super().__init__()
+        self.marginloss = nn.MarginRankingLoss(margin=0.0)
 
-    def forward(self, prob1, prob2, q):
-        l1 = torch.sum(torch.matmul(q, prob1), dim=1)
-        l2 = torch.sum(torch.matmul(q, prob2), dim=1)
-        print(l1.shape, l2.shape)
-        exit()
-        loss = -0.5 * torch.mean(torch.sum(l1, l2, dim=1))
+    def corr_matrix(self, x: torch.Tensor):
+        x_flat = x.permute(0, 2, 3, 1).contiguous()
+        # x_flat = x.permute(1, 2, 0).contiguous()
+        x_flat = x_flat.reshape(-1, self.d)  # (hw, d)
+        norm_x = F.normalize(x_flat, dim=1)  # (hw, d)
+
+        return torch.matmul(norm_x, norm_x.T)
+
+    def forward(self, ori, aug):
+        '''
+
+        :param ori: (b, hidden_dim, h, w)
+        :param aug: (b, hidden_dim, h, w)
+        :return:
+        '''
+        b, d, h, w = ori.shape
+        self.d = d
+        self.device = ori.device
+        loss = 0
+
+        ori_corr = self.corr_matrix(ori)  # (hw, hw)
+        aug_corr = self.corr_matrix(aug)  # (hw, hw)
+
+        loss = ori_corr - aug_corr
+        mask = (loss > 0.1).float()
+        loss *= mask
+        loss = torch.sum(loss) / max(1, torch.sum(mask))
+        # rank_input1 = ori_corr  # (hw, )
+        # rank_input2 = torch.roll(rank_input1, 1, 1)  # (hw, )
+        # rank_target, rank_margin = self.get_target_margin(aug_corr)
+        # rank_target_nonzero = rank_target.clone()
+        # rank_target_nonzero[rank_target_nonzero == 0] = 1
+        # rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
+        # loss += self.marginloss(rank_input1, rank_input2, rank_target)
+
+        # for i in range(b):
+        #     ori_corr = self.corr_matrix(ori[i])  # (hw, hw)
+        #     aug_corr = self.corr_matrix(aug[i])  # (hw, hw)
+        #
+        #     rank_input1 = ori_corr[i]  # (hw, )
+        #     rank_input2 = torch.roll(rank_input1, 1, 0)  # (hw, )
+        #     rank_target, rank_margin = self.get_target_margin(aug_corr[i])
+        #     rank_target_nonzero = rank_target.clone()
+        #     rank_target_nonzero[rank_target_nonzero == 0] = 1
+        #     rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
+        #     loss += self.marginloss(rank_input1, rank_input2, rank_target)
+
+        # for j in range(h * w):
+        #     rank_input1 = ori_corr[j]  # (hw, )
+        #     rank_input2 = torch.roll(rank_input1, -1)  # (hw, )
+        #     rank_target, rank_margin = self.get_target_margin(aug_corr[j])
+        #     rank_target_nonzero = rank_target.clone()
+        #     rank_target_nonzero[rank_target_nonzero == 0] = 1
+        #     rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
+        #     loss += self.marginloss(rank_input1, rank_input2, rank_target)
+
+        # loss = torch.mean(loss)
+        # loss = loss / (b)
+        # loss = loss / (b * h * w)
         return loss
+
+    def get_target_margin(self, aug_corr):
+        target1 = aug_corr.detach().cpu().numpy()
+        target2 = torch.roll(aug_corr, 1, 1).detach().cpu().numpy()
+        # target2 = torch.roll(aug_corr, 1, 0).detach().cpu().numpy()
+        # target2 = torch.roll(aug_corr, -1).detach().cpu().numpy()
+
+        greater = np.array(target1 > target2, dtype="float")
+        less = np.array(target1 < target2, dtype="float") * (-1)
+
+        target = greater + less
+        target = torch.from_numpy(target).float().to(self.device)
+
+        margin = abs(target1 - target2)
+        margin = torch.from_numpy(margin).float().to(self.device)
+
+        return target, margin
 
 
 class InfoNCELoss(nn.Module):

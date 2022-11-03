@@ -66,9 +66,12 @@ class DINONewVQWrapper(nn.Module):
             # feat: (b, 384, 28, 28)
             # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
             # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
+            model_loss = 0
+            if self.recon_weight > 0.0:
+                model_loss = output["recon-loss"] * self.recon_weight
 
-            model_loss = output["recon-loss"] * self.recon_weight
-            model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
+            if self.vq_weight > 0.0:
+                model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
 
             if self.info_nce_weight > 0.0:
                 model_loss = model_loss + (output["info_nce"] * self.info_nce_weight)

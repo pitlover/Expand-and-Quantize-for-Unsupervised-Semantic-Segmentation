@@ -70,30 +70,8 @@ class MarginRankingLoss(nn.Module):
         rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
         loss = self.marginloss(rank_input1, rank_input2, rank_target)
 
-        # for i in range(b):
-        #     ori_corr = self.corr_matrix(ori[i])  # (hw, hw)
-        #     aug_corr = self.corr_matrix(aug[i])  # (hw, hw)
-        #
-        #     rank_input1 = ori_corr[i]  # (hw, )
-        #     rank_input2 = torch.roll(rank_input1, 1, 0)  # (hw, )
-        #     rank_target, rank_margin = self.get_target_margin(aug_corr[i])
-        #     rank_target_nonzero = rank_target.clone()
-        #     rank_target_nonzero[rank_target_nonzero == 0] = 1
-        #     rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
-        #     loss += self.marginloss(rank_input1, rank_input2, rank_target)
-
-        # for j in range(h * w):
-        #     rank_input1 = ori_corr[j]  # (hw, )
-        #     rank_input2 = torch.roll(rank_input1, -1)  # (hw, )
-        #     rank_target, rank_margin = self.get_target_margin(aug_corr[j])
-        #     rank_target_nonzero = rank_target.clone()
-        #     rank_target_nonzero[rank_target_nonzero == 0] = 1
-        #     rank_input2 = rank_input2 + rank_margin / rank_target_nonzero
-        #     loss += self.marginloss(rank_input1, rank_input2, rank_target)
-
         loss = torch.mean(loss)
-        # loss = loss / (b)
-        # loss = loss / (b * h * w)
+
         return loss
 
     def get_target_margin(self, aug_corr):
@@ -484,6 +462,11 @@ class JSDLoss(nn.Module):
         m = (0.5 * (p + q).add(1e-6)).log()
         # TODO check position
         return 0.5 * (self.kl(m, p.add(1e-6).log()) + self.kl(m, q.add(1e-6).log()))
+
+    # def forward(self, p: torch.Tensor, q: torch.Tensor):
+    #     loss = self.kl(q.log, p.log)
+    #
+    #     return loss
 
 
 def tensor_correlation(a, b):

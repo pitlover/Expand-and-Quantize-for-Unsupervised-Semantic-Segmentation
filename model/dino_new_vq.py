@@ -81,15 +81,14 @@ class DINONewVq(nn.Module):
             self.num_pq = [self.num_pq] * self.num_vq
 
         if self.vq_type == "ema":
-            raise ValueError("Not implemented")
-            # vq_kwargs["decay"] = cfg["vq"]["decay"]
-            # vq_kwargs["eps"] = cfg["vq"]["eps"]
-            # vq_blocks = [
-            #     EMAVectorQuantizer(vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs) if (self.num_pq == 1) else
-            #     ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
-            #                             quantizer_cls=EMAVectorQuantizer)
-            #     for i in range(self.num_vq)
-            # ]
+            vq_blocks = [
+                EMACodebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
+                if (self.num_pq == 1) else
+                ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+                                        quantizer_cls=EMACodebook)
+                for i in range(self.num_vq)
+            ]
+            self.vq_blocks = nn.ModuleList(vq_blocks)
         elif self.vq_type == "param":
             vq_blocks = [
                 Codebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
@@ -118,9 +117,10 @@ class DINONewVq(nn.Module):
                                         cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
                                         )
         self.jsd_loss = JSDLoss()
-        self.margin_loss = MarginRankingLoss()
+        # self.margin_loss = MarginRankingLoss()
 
         # -------- final-linear -------- #
+        # self.final_conv = nn.Conv2d(self.hidden_dim, self.feat_dim)
 
     def forward(self, img: torch.Tensor, aug_img: torch.Tensor = None, it: int = 0, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
@@ -178,12 +178,287 @@ class DINONewVq(nn.Module):
             # MI loss
             semantic_feat_img1, semantic_feat_img2 = torch.chunk(feat, chunks=2, dim=0)  # (b, hidden_dim, h, w)
             outputs["info_nce"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
-            outputs["margin"] = self.margin_loss(semantic_feat_img1, semantic_feat_img2)
+            # outputs["margin"] = self.margin_loss(semantic_feat_img1, semantic_feat_img2)
 
             # split half
             feat = torch.chunk(feat, chunks=2, dim=0)[0]
             quantized_feat = torch.chunk(quantized_feat, chunks=2, dim=0)[0]
         return feat, quantized_feat, outputs
+
+
+class EmbeddingEMA(nn.Module):
+    def __init__(self,
+                 num_codebook: int,
+                 embed_dim: int,
+                 decay: float = 0.99,
+                 eps: float = 1e-5
+                 ) -> None:
+        super().__init__()
+        self.decay = decay
+        self.eps = eps
+        self.num_codebook = num_codebook
+
+        weight = torch.randn(num_codebook, embed_dim)
+        nn.init.uniform_(weight, -1.0 / num_codebook, 1.0 / num_codebook)
+        # nn.init.xavier_uniform_(weight)
+
+        self.register_buffer("weight", weight)
+        self.register_buffer("weight_avg", weight.clone())
+        self.register_buffer("vq_count", torch.zeros(num_codebook))
+
+    @torch.no_grad()
+    def reset(self) -> None:
+        self.weight_avg.data.copy_(self.weight.data)
+        self.vq_count.fill_(0)
+
+    def forward(self, indices: torch.Tensor) -> torch.Tensor:
+        embeded = F.embedding(indices, self.weight)
+
+        return embeded
+
+    def update(self, vq_current_count, vq_current_sum) -> None:
+        # EMA count update
+        self.vq_count_ema_update(vq_current_count)
+        # EMA weight average update
+        self.weight_avg_ema_update(vq_current_sum)
+        # normalize embed_avg and update weight
+        self.weight_update()
+
+    def vq_count_ema_update(self, vq_current_count) -> None:
+        self.vq_count.data.mul_(self.decay).add_(vq_current_count, alpha=1 - self.decay)
+
+    def weight_avg_ema_update(self, vq_current_sum) -> None:
+        self.weight_avg.data.mul_(self.decay).add_(vq_current_sum, alpha=1 - self.decay)
+
+    def weight_update(self) -> None:
+        n = self.vq_count.sum()
+        smoothed_cluster_size = (
+                (self.vq_count + self.eps) / (n + self.num_codebook * self.eps) * n
+        )  # Laplace smoothing
+        # normalize embedding average with smoothed cluster size
+        weight_normalized = self.weight_avg / smoothed_cluster_size.unsqueeze(1)  # (unsqueeze channel)
+        self.weight.data.copy_(weight_normalized)
+
+
+class EMACodebook(nn.Module):
+    def __init__(self,
+                 num_codebook_vectors: int,
+                 latent_dim: int,
+                 beta=0.25,
+                 normalize: str = "none",
+                 use_restart: bool = False,
+                 use_weighted_sum: bool = False,
+                 need_initialized: str = "kmeans",
+                 pq_dropout: float = 0.0,
+                 jsd_ts: float = 1.0):
+        super(EMACodebook, self).__init__()
+        """
+        embedding: (num_vq, embed_dim)
+        beta: the factor for vq_loss
+        input: (b, embed_dim, h, w)
+        output: (b, embed_dim, h, w)
+        """
+        # self.num_codebook_vectors = args.num_codebook_vectors
+        self.latent_dim = latent_dim
+        self.beta = beta
+        self.use_weighted_sum = use_weighted_sum
+        self.pq_dropout = pq_dropout
+        self.num_codebook_vectors = num_codebook_vectors
+        # self.embedding = nn.Embedding(num_codebook_vectors, latent_dim)
+        # self.embedding.weight.data.uniform_(-1.0 / num_codebook_vectors, 1.0 / num_codebook_vectors)
+        self.codebook = EmbeddingEMA(self.num_codebook_vectors, self.latent_dim,
+                                     decay=0.99, eps=1.0e-5)  # codebook: (K, d)
+        self.register_buffer("vq_count", torch.zeros(self.num_codebook_vectors), persistent=False)
+        self.vq_count = torch.zeros(self.num_codebook_vectors)
+
+        self.update_indices = None  # placeholder
+        self.update_candidates = None  # placeholder
+
+        self.normalize = normalize
+        if self.use_weighted_sum:
+            assert self.normalize == "none", "Weight_sum should be unnormalized"
+        if normalize == "z_trainable":
+            self.z_mean = nn.Parameter(torch.zeros(self.latent_dim))
+            self.z_log_var = nn.Parameter(torch.zeros(self.latent_dim))
+        self.use_restart = use_restart
+        self.need_initialized = need_initialized
+
+        # ----- JSD ------ #
+        self.jsd_loss = JSDLoss()
+        self.jsd_ts = jsd_ts
+        self.entropy_loss = EntropyLoss()
+
+    @torch.no_grad()
+    def prepare_restart(self, vq_current_count: torch.Tensor, z_flat: torch.Tensor) -> None:
+        """Restart dead entries
+        :param vq_current_count:        (K,)
+        :param z_flat:                  (n, d) = (bhw, d)
+        """
+        n_data = z_flat.shape[0]
+        update_indices = torch.nonzero(vq_current_count == 0, as_tuple=True)[0]
+        n_update = len(update_indices)
+
+        z_indices = list(range(n_data))
+        random.shuffle(z_indices)
+
+        if n_update <= n_data:
+            z_indices = z_indices[:n_update]
+        else:
+            update_indices = update_indices.tolist()
+            random.shuffle(update_indices)
+            update_indices = update_indices[:n_data]
+
+        self.update_indices = update_indices
+        self.update_candidates = z_flat[z_indices]
+
+    @torch.no_grad()
+    def restart(self) -> None:
+        if (self.update_indices is not None) and (self.update_candidates is not None):
+            self.codebook.weight.data[self.update_indices] = self.update_candidates
+            self.codebook.reset()
+
+            self.update_indices = None
+            self.update_candidates = None
+
+    def forward(self, z: torch.Tensor, i: int, it: int):  # i-th pq, iteration
+        output = dict()
+
+        self.vq_count = self.vq_count.to(z.device)
+        # TODO kmeans_sampling
+        # z_flat = z
+        z = z.permute(0, 2, 3, 1).contiguous()  # (b, d, h, w) -> (b, h, w, d)
+        z_flat = z.view(-1, self.latent_dim)  # (bhw, d)
+
+        if self.need_initialized != "none" and self.training:
+            if self.need_initialized == "rand":
+                self.prepare_restart(torch.zeros(self.num_codebook_vectors, dtype=torch.long, device=z.device),
+                                     z_flat)
+                self.restart()
+
+            elif self.need_initialized == "kmeans":
+                clustering = KMeans(init="k-means++", n_clusters=self.num_codebook_vectors, random_state=0)
+                cpu_z_flat = z_flat.detach().cpu().numpy()
+                clustering.fit(cpu_z_flat)
+                centroids = np.array(clustering.cluster_centers_)
+                centroids = torch.from_numpy(centroids).float().to(z.device)
+                self.codebook.weight.data.copy_(centroids)
+                self.codebook.weight_avg.data.copy_(centroids)
+                # kmeans = faiss.Kmeans(d=z_flat.shape[-1], k=self.num_codebook_vectors, verbose=True, gpu=True)
+                # cpu_z_flat = z_flat.detach().cpu().numpy().astype(np.float32)
+                # kmeans.train(cpu_z_flat)
+                # centroids = torch.from_numpy(kmeans.centroids).float().to(z.device)
+                # self.embedding.weight.data.copy_(centroids)
+                # del centroids, cpu_z_flat, kmeans
+                # torch.cuda.empty_cache()
+
+            elif self.need_initialized == "uni":
+                nn.init.xavier_uniform_(self.codebook.weight)
+                nn.init.xavier_uniform_(self.codebook.weight_avg)
+
+            elif self.need_initialized == "normal":
+                nn.init.xavier_normal_(self.codebook.weight)
+                nn.init.xavier_normal_(self.codebook.weight_avg)
+
+            self.need_initialized = "none"
+
+        codebook = self.codebook.weight
+
+        if self.normalize == "l2":
+            z_norm = F.normalize(z_flat, dim=1)
+            codebook_norm = F.normalize(codebook, dim=1)
+        elif self.normalize == "z_norm":  # z-normalize
+            z_flat_std, z_flat_mean = torch.std_mean(z_flat, dim=1, keepdim=True)  # (n, 1)
+            z_norm = (z_flat - z_flat_mean) / (z_flat_std + 1e-5)
+
+            codebook_std, codebook_mean = torch.std_mean(codebook, dim=1, keepdim=True)  # (K, 1)
+            codebook_norm = (codebook - codebook_mean) / (codebook_std + 1e-5)
+        elif self.normalize == "z_trainable":
+            z_flat_mean = self.z_mean
+            z_flat_std = self.z_log_var.exp().sqrt()
+
+            z_norm = (z_flat - z_flat_mean) / (z_flat_std + 1e-5)
+
+            codebook_std, codebook_mean = torch.std_mean(codebook, dim=0)  # (d,)
+            codebook_norm = (codebook - codebook_mean) / (codebook_std + 1e-5)
+        elif self.normalize == "none":
+            z_norm = z_flat
+            codebook_norm = codebook
+        else:
+            raise ValueError(f"Unsupported normalize type {self.normalize}")
+
+        # pq_dropout
+        if self.pq_dropout > 0.0:
+            pq_mask = torch.cuda.FloatTensor(self.num_codebook_vectors).uniform_() > self.pq_dropout
+            codebook_norm = codebook_norm[pq_mask]
+
+        d = torch.sum(z_norm ** 2, dim=1, keepdim=True) + \
+            torch.sum(codebook_norm ** 2, dim=1) - \
+            2 * (torch.matmul(z_norm, codebook_norm.t()))  # (2bhw, n_prototypes)
+
+        min_encoding_indices = torch.argmin(d, dim=1)
+        distance_prob = F.softmax(-d /  self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
+        vq_indices = torch.argmin(d, dim=1)
+
+        if self.use_weighted_sum:
+            z_q = torch.matmul(distance_prob, codebook_norm)  # TODO check temperature scaling
+        else:
+            z_q = self.codebook(min_encoding_indices)
+
+        # avoid collapse
+        if self.training:
+            with torch.no_grad():
+                vq_indices_one_hot = F.one_hot(vq_indices, self.num_codebook_vectors).to(z.dtype)  # (n, K)
+
+                vq_current_count = torch.sum(vq_indices_one_hot, dim=0)  # (K,)
+                vq_current_sum = torch.matmul(vq_indices_one_hot.t(), z_flat)  # (K, n) x (n, d) = (K, d)
+                vq_current_count = all_reduce_tensor(vq_current_count, op="sum")
+                vq_current_sum = all_reduce_tensor(vq_current_sum, op="sum")
+
+                self.vq_count += vq_current_count
+
+                # vq_current_hist = get_histogram_count(vq_current_count, prefix="current")
+                # vq_hist = get_histogram_count(self.vq_count, prefix="total")
+                # output.update(vq_hist)
+                # output.update(vq_current_hist)
+
+                self.codebook.update(vq_current_count, vq_current_sum)
+
+                if self.use_restart:
+                    self.prepare_restart(vq_current_count, z_flat)
+
+                # if self.use_split:
+                #     n_split = self.split(vq_current_count)  # not-used count
+                # else:
+                #     n_split = len(torch.nonzero(vq_current_count == 0, as_tuple=True)[0])
+                output["codebook-usage"] = (codebook_norm.shape[0] - len(
+                    torch.nonzero(vq_current_count == 0, as_tuple=True)[0])) / codebook_norm.shape[0]  # used ratio
+
+        # compute loss for embedding
+        commitment_loss = F.mse_loss(z_norm, z_q.detach())  # make input to be similar to codebook
+        q_loss = self.beta * commitment_loss
+
+        if not self.use_weighted_sum:
+            z_q = z_norm + (z_q - z_norm).detach()
+
+        # TODO kmeans sampling
+        z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
+
+        output["vq-loss"] = q_loss
+        output["codebook-sum"] = torch.sum(torch.abs(self.codebook.weight))
+
+        top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
+        # TODO jsd-loss check
+        output["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
+        output["entropy"] = self.entropy_loss(top_dis_prob_1, top_dis_prob_2)
+        # with torch.no_grad():
+        #     os.makedirs('./pq0_correlation_matrix/pq_mask_jsd0.1/512/', exist_ok=True)
+        #     if i == 0 and it % 2000 == 1:
+        #         # codebook_norm : (n_codebook, dim)
+        #         corr_matrix_i = torch.matmul(codebook_norm, codebook_norm.T)
+        #         torch.save(corr_matrix_i, f'./pq0_correlation_matrix/pq_mask_jsd0.1/512/{self.pq_dropout}_{it}.pt')
+        #         del corr_matrix_i
+        #         torch.cuda.empty_cache()
+        return z_q, output, distance_prob
 
 
 class Codebook(nn.Module):
@@ -256,8 +531,7 @@ class Codebook(nn.Module):
     @torch.no_grad()
     def restart(self) -> None:
         if (self.update_indices is not None) and (self.update_candidates is not None):
-            self.embedding.weight.data[self.update_indices].copy_(self.update_candidates)
-
+            self.embedding.weight.data[self.update_indices] = self.update_candidates.float()
             self.vq_count.fill_(0)
 
             self.update_indices = None
@@ -363,6 +637,7 @@ class Codebook(nn.Module):
 
                 if self.use_restart:
                     self.prepare_restart(vq_current_count, z_flat)
+                    self.restart()
 
                 # if self.use_split:
                 #     n_split = self.split(vq_current_count)  # not-used count

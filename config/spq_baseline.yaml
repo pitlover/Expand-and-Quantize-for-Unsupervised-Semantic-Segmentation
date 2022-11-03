@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_reproduced"
+  name: "SPQ_baseline_info1"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -11,10 +11,10 @@ num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
 is_visualize: false                           # default false, true
-visualize_path: "./visualize/jsd1.0/crf/"
+visualize_path: "./visualize/jsd1.0/"
 # ---------------------------------------------------------------- #
 resume:
-  checkpoint: null                          # default null
+  checkpoint: null                            # default null
 
 # ---------------------------------------------------------------- #
 model:
@@ -33,25 +33,25 @@ model:
     num_codebooks: [ 512 ] # 512
     embed_dims: [ 1024 ]
     beta: 0.25
-    normalize: "l2"                           # l2, z_norm, z_trainable, none
+    normalize: "none"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
     use_weighted_sum: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 32 ]             # 64               # 1 for vq
+    num_pq: [ 64 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
 
 # ---------------------------------------------------------------- #
 loss:
-  recon_weight: 1.0
-  vq_weight: 1.0
+  recon_weight: 0.0
+  vq_weight: 0.0
   info_nce_weight: 0.0
-  jsd_weight: 0.0
-  margin_weight: 0.0
+  jsd_weight: 1.0
+  margin_weight : 0.0
 
   info_nce:
     normalize: "l2"
@@ -60,8 +60,8 @@ loss:
     cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
   jsd:
     temperature: 1.0
-    entropy_weight: 0.01
-  margin:
+    entropy_weight: 0.0
+  margin :
 
 # ---------------------------------------------------------------- #
 dataset:
@@ -119,5 +119,5 @@ train:
   max_epochs: 3
   print_interval_iters: 25
   valid_interval_iters: 100
-  clip_grad: 1.0      # default 1.0
+  clip_grad: 1.0
   num_accum: 1

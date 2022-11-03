@@ -17,9 +17,8 @@ from model.dino_res import DINORes
 # from model.dino_cluster_kmeans import DINOCluster
 from model.dino_cluster import DINOCluster
 from model.dino_new_vq import DINONewVq
-
+from model.dino_spq import DINOSPQ
 from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
-from model.blocks.club_encoder import CLUBEncoder
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
@@ -36,6 +35,8 @@ def build_model(cfg: dict,
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
+    elif "spq" in name:
+        model = DINONewVQWrapper(cfg, DINOSPQ(cfg["model"], cfg["loss"]))
     elif "new" in name:
         model = DINONewVQWrapper(cfg, DINONewVq(cfg["model"], cfg["loss"]))
     elif "cluster" in name:
@@ -176,7 +177,7 @@ def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> D
         loader = DataLoader(
             dataset,
             batch_size=max(cfg["batch_size"] // world_size, 1),
-            # batch_size=max(cfg["batch_size"] // world_size, 1) if "train" in mode else 1,
+            # batch_size=max(cfg["batch_size"] // world_size, 1) if "train" in mode else 1, # for visualization
             num_workers=max((cfg["num_workers"] + world_size - 1) // world_size, 1),
             pin_memory=True,
             sampler=ddp_sampler

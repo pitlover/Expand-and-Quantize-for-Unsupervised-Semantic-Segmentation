@@ -31,6 +31,7 @@ class DINONewVQWrapper(nn.Module):
         self.jsd_weight = cfg["loss"]["jsd_weight"]
         self.margin_weight = cfg["loss"]["margin_weight"]
         self.entropy_weight = 0.0
+
         if self.jsd_weight > 0.0:
             self.entropy_weight = cfg["loss"]["jsd"]["entropy_weight"]
 

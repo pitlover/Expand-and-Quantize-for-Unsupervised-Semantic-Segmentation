@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_reproduced"
+  name: "NEW_PQ_baseline_l2_uniitial_512_top1_32*32_bs32_reproduced_kmeans"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #

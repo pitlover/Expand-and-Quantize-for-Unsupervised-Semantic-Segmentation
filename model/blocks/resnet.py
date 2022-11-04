@@ -34,7 +34,7 @@ class EncResBlock(nn.Module):
         self.act1 = nn.Identity()
 
         # self.conv1 = nn.Conv2d(in_channel, out_channel, (3, 3), padding=1)
-        self.conv1 = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=True)
+        self.conv1 = nn.Conv2d(in_channel, in_channel, (1, 1))
         # self.conv1 = nn.Linear(in_channel, out_channel)
 
         # self.norm2 = nn.BatchNorm2d(out_channel)
@@ -47,7 +47,7 @@ class EncResBlock(nn.Module):
         # self.act2 = nn.LeakyReLU(0.1)
 
         # self.conv2 = nn.Conv2d(out_channel, out_channel, (3, 3), padding=1)
-        self.conv2 = nn.Conv2d(out_channel, out_channel, 1, 1, 0, bias=True)
+        self.conv2 = nn.Conv2d(in_channel, out_channel, (1, 1))
         # self.conv2 = nn.Linear(out_channel, out_channel)
 
         if in_channel != out_channel:
@@ -56,7 +56,7 @@ class EncResBlock(nn.Module):
             # self.norm_shortcut = LayerNorm2d(in_channel)
             self.norm_shortcut = nn.Identity()
             # self.conv_shortcut = nn.Conv2d(in_channel, out_channel, (3, 3), padding=1)
-            self.conv_shortcut = nn.Conv2d(in_channel, out_channel, 1, 1, 0, bias=False)
+            self.conv_shortcut = nn.Conv2d(in_channel, out_channel, (1, 1))
             # self.conv_shortcut = nn.Linear(in_channel, out_channel)
 
         else:

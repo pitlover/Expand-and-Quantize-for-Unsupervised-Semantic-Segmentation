@@ -79,7 +79,8 @@ class DinoFeaturizer(nn.Module):
 
         feat = feat[0]  # (b, 1+28x28, 384)
         feat = feat[:, 1:, :].reshape(b, feat_h, feat_w, -1).permute(0, 3, 1, 2).contiguous()  # (b, 384, 28, 28)
-        if self.is_dropout:
-            feat = self.dropout(feat)
+
+
 
         return feat
+

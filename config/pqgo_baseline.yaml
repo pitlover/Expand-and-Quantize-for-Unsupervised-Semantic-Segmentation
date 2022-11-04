@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_baseline_stego_reproduced_128"
+  name: "PQGO_baseline_dim128"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -22,16 +22,16 @@ model:
     model_type: "vit_small"
     dino_patch_size: 8
     freeze_backbone: true
+    dropout: true
     drop_prob: 0.1
     pretrained_weights: null
-    dropout: false
   enc_num_blocks: 1
   dec_num_blocks: 3
   last_norm: false
   vq:
     vq_type: "param"                          # "ema", "param"
     num_codebooks: [ 512 ] # 512
-    embed_dims: [ 128 ]
+    embed_dims: [ 1024 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
@@ -47,9 +47,9 @@ model:
 
 # ---------------------------------------------------------------- #
 loss:
-  stego_weight : 1.0
-  recon_weight: 0.0
-  vq_weight: 0.0
+  stego_weight: 1.0
+  recon_weight: 1.0
+  vq_weight: 1.0
   info_nce_weight: 0.0
   jsd_weight: 0.0
   margin_weight: 0.0
@@ -84,7 +84,7 @@ dataset:
     crop_type: "five" # null, "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
-    num_neighbors : 7
+    num_neighbors: 7
     res: 224
   val:
     data_dir: ${data_dir}
@@ -104,15 +104,15 @@ dataloader:
 # ---------------------------------------------------------------- #
 optimizer:
   model:
-    name: "adamw"
-    lr: 5.0e-4
+    name: "adam"
+    lr: 3.0e-4
     weight_decay: 0.0
   cluster:
     name: "adam"
-    lr: 5.0e-3
+    lr: 3.0e-3
   linear:
     name: "adam"
-    lr: 5.0e-3
+    lr: 3.0e-3
 
 # ---------------------------------------------------------------- #
 scheduler:
@@ -125,7 +125,7 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "feat" # TODO chagned to vq0 -> for vq
+  output_type: "vq0" # TODO chagned to vq0 -> for vq
   extra_classes: 0
 
 # ---------------------------------------------------------------- #

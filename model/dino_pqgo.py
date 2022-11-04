@@ -85,20 +85,20 @@ class DIONPQGO(nn.Module):
             raise ValueError(f"Unsupported vq type {self.vq_type}.")
 
         # -------- semantic-decoder -------- #
-        num_dec_blocks = cfg["dec_num_blocks"]
-        dec_proj = []
-        for i in range(num_dec_blocks):
-            dec_proj.append(
-                # DecResBlock(self.feat_dim, self.feat_dim))
-                DecResBlock(self.hidden_dim,
-                            self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
-        self.dec_proj = nn.Sequential(*dec_proj)
-        # -------- loss -------- #
-        self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
-                                        neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
-                                        temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
-                                        cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
-                                        )
+        # num_dec_blocks = cfg["dec_num_blocks"]
+        # dec_proj = []
+        # for i in range(num_dec_blocks):
+        #     dec_proj.append(
+        #         # DecResBlock(self.feat_dim, self.feat_dim))
+        #         DecResBlock(self.hidden_dim,
+        #                     self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
+        # self.dec_proj = nn.Sequential(*dec_proj)
+        # # -------- loss -------- #
+        # self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
+        #                                 neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
+        #                                 temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
+        #                                 cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
+        #                                 )
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
 
     def forward(self, img: torch.Tensor,
@@ -125,10 +125,10 @@ class DIONPQGO(nn.Module):
 
         quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat, it=it)  # (2b, hidden_dim, h, w)
 
-        recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
-        recon_loss = F.mse_loss(recon, dino_feat)
-
-        outputs["recon-loss"] = recon_loss
+        # recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
+        # recon_loss = F.mse_loss(recon, dino_feat)
+        #
+        # outputs["recon-loss"] = recon_loss
 
         # MI loss
         # semantic_feat_img1, semantic_feat_img2 = torch.chunk(feat, chunks=2, dim=0)  # (b, hidden_dim, h, w)

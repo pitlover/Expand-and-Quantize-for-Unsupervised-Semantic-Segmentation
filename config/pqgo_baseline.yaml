@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_baseline_dim128"
+  name: "PQGO_baseline_512_1*1024_vq_decX"
   notes: "1024-512"
 
 # ---------------------------------------------------------------- #
@@ -40,7 +40,7 @@ model:
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 32 ]             # 64               # 1 for vq
+    num_pq: [ 1 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -48,7 +48,7 @@ model:
 # ---------------------------------------------------------------- #
 loss:
   stego_weight: 1.0
-  recon_weight: 1.0
+  recon_weight: 0.0
   vq_weight: 1.0
   info_nce_weight: 0.0
   jsd_weight: 0.0

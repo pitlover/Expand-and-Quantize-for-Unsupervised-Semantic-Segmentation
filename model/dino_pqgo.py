@@ -14,28 +14,10 @@ from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
 import faiss
-from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss
+from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss, STEGOLoss
 
 
-@torch.no_grad()
-def get_histogram_count(count: torch.Tensor, prefix: str = "") -> Dict:
-    prob = count.float() / (count.sum() + 1)  # (K,)
-    num_codebook = len(prob)
-
-    prob, _ = torch.sort(prob, dim=0, descending=True)  # (K,)
-    c_sum = torch.cumsum(prob, dim=0)  # (K,)
-    output = {f"{prefix}-p10": None, f"{prefix}-p50": None, f"{prefix}-p90": None}
-    for i in range(len(c_sum)):
-        if (c_sum[i] >= 0.9) and (output[f"{prefix}-p90"] is None):
-            output[f"{prefix}-p90"] = i / num_codebook
-        if (c_sum[i] >= 0.5) and (output[f"{prefix}-p50"] is None):
-            output[f"{prefix}-p50"] = i / num_codebook
-        if (c_sum[i] >= 0.1) and (output[f"{prefix}-p10"] is None):
-            output[f"{prefix}-p10"] = i / num_codebook
-    return output
-
-
-class DINONewVq(nn.Module):
+class DIONPQGO(nn.Module):
     def __init__(self, cfg: dict, cfg_loss: dict):
         super().__init__()
         self.cfg = cfg
@@ -52,136 +34,121 @@ class DINONewVq(nn.Module):
         self.enc_proj = nn.Sequential(*semantic_enc_proj)
         # self.enc_proj = nn.Conv2d(self.feat_dim, self.hidden_dim, (1, 1)) # TODO check
 
-        # -------- vq -------- #
-        vq_num_codebooks = cfg["vq"]["num_codebooks"]
-        vq_embed_dims = cfg["vq"]["embed_dims"]
-        assert len(vq_num_codebooks) == len(vq_embed_dims)
-        self.vq_num_codebooks = vq_num_codebooks[0]
-        self.num_vq = len(vq_num_codebooks)
-        self.beta = cfg["vq"]["beta"]
-        self.vq_type = cfg["vq"]["vq_type"]
-        self.normalize = cfg["vq"].get("normalize", "none")
-        self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
-        self.use_restart = cfg["vq"].get("use_restart", False)
-        self.need_initialized = cfg["vq"].get("need_initialized", False)
-        self.pq_dropout = cfg["vq"].get("pq_dropout", 0.0)
-        self.jsd_ts = cfg_loss["jsd"].get("temperature", 1.0)
-        self.n_kmeans = cfg["vq"].get("n_kmeans", 1)
-        vq_kwargs = dict(beta=self.beta,
-                         normalize=self.normalize,
-                         use_restart=self.use_restart,
-                         use_weighted_sum=self.use_weighted_sum,
-                         need_initialized=self.need_initialized,
-                         pq_dropout=self.pq_dropout,
-                         jsd_ts=self.jsd_ts)
+        # # -------- vq -------- #
+        # vq_num_codebooks = cfg["vq"]["num_codebooks"]
+        # vq_embed_dims = cfg["vq"]["embed_dims"]
+        # assert len(vq_num_codebooks) == len(vq_embed_dims)
+        # self.vq_num_codebooks = vq_num_codebooks[0]
+        # self.num_vq = len(vq_num_codebooks)
+        # self.beta = cfg["vq"]["beta"]
+        # self.vq_type = cfg["vq"]["vq_type"]
+        # self.normalize = cfg["vq"].get("normalize", "none")
+        # self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
+        # self.use_restart = cfg["vq"].get("use_restart", False)
+        # self.need_initialized = cfg["vq"].get("need_initialized", False)
+        # self.pq_dropout = cfg["vq"].get("pq_dropout", 0.0)
+        # self.jsd_ts = cfg_loss["jsd"].get("temperature", 1.0)
+        # self.n_kmeans = cfg["vq"].get("n_kmeans", 1)
+        # vq_kwargs = dict(beta=self.beta,
+        #                  normalize=self.normalize,
+        #                  use_restart=self.use_restart,
+        #                  use_weighted_sum=self.use_weighted_sum,
+        #                  need_initialized=self.need_initialized,
+        #                  pq_dropout=self.pq_dropout,
+        #                  jsd_ts=self.jsd_ts)
+        #
+        # self.num_pq = cfg["vq"].get("num_pq", 1)
+        #
+        # if isinstance(self.num_pq, int):
+        #     self.num_pq = [self.num_pq] * self.num_vq
+        #
+        # if self.vq_type == "ema":
+        #     vq_blocks = [
+        #         EMACodebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
+        #         if (self.num_pq == 1) else
+        #         ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+        #                                 quantizer_cls=EMACodebook)
+        #         for i in range(self.num_vq)
+        #     ]
+        #     self.vq_blocks = nn.ModuleList(vq_blocks)
+        # elif self.vq_type == "param":
+        #     vq_blocks = [
+        #         Codebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
+        #         if (self.num_pq == 1) else
+        #         ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
+        #                                 quantizer_cls=Codebook)
+        #         for i in range(self.num_vq)
+        #     ]
+        #     self.vq_blocks = nn.ModuleList(vq_blocks)
+        # else:
+        #     raise ValueError(f"Unsupported vq type {self.vq_type}.")
+        #
+        # # -------- semantic-decoder -------- #
+        # num_dec_blocks = cfg["dec_num_blocks"]
+        # dec_proj = []
+        # for i in range(num_dec_blocks):
+        #     dec_proj.append(
+        #         # DecResBlock(self.feat_dim, self.feat_dim))
+        #         DecResBlock(self.hidden_dim,
+        #                     self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
+        # self.dec_proj = nn.Sequential(*dec_proj)
+        # # -------- loss -------- #
+        # self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
+        #                                 neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
+        #                                 temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
+        #                                 cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
+        #                                 )
+        self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
 
-        self.num_pq = cfg["vq"].get("num_pq", 1)
-
-        if isinstance(self.num_pq, int):
-            self.num_pq = [self.num_pq] * self.num_vq
-
-        if self.vq_type == "ema":
-            vq_blocks = [
-                EMACodebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
-                if (self.num_pq == 1) else
-                ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
-                                        quantizer_cls=EMACodebook)
-                for i in range(self.num_vq)
-            ]
-            self.vq_blocks = nn.ModuleList(vq_blocks)
-        elif self.vq_type == "param":
-            vq_blocks = [
-                Codebook(num_codebook_vectors=vq_num_codebooks[0], latent_dim=vq_embed_dims[0], **vq_kwargs)
-                if (self.num_pq == 1) else
-                ProductQuantizerWrapper(self.num_pq[i], vq_num_codebooks[i], vq_embed_dims[i], **vq_kwargs,
-                                        quantizer_cls=Codebook)
-                for i in range(self.num_vq)
-            ]
-            self.vq_blocks = nn.ModuleList(vq_blocks)
-        else:
-            raise ValueError(f"Unsupported vq type {self.vq_type}.")
-
-        # -------- semantic-decoder -------- #
-        num_dec_blocks = cfg["dec_num_blocks"]
-        dec_proj = []
-        for i in range(num_dec_blocks):
-            dec_proj.append(
-                # DecResBlock(self.feat_dim, self.feat_dim))
-                DecResBlock(self.hidden_dim,
-                            self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
-        self.dec_proj = nn.Sequential(*dec_proj)
-        # -------- loss -------- #
-        self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
-                                        neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
-                                        temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
-                                        cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
-                                        )
-
-        # -------- final-linear -------- #
-        # self.final_conv = nn.Conv2d(self.hidden_dim, self.feat_dim)
-
-    def forward(self, img: torch.Tensor, aug_img: torch.Tensor = None, it: int = 0, stage: int = 0
+    def forward(self, img: torch.Tensor,
+                aug_img: torch.Tensor = None,
+                img_pos: torch.Tensor = None,
+                it: int = 0, stage: int = 0
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
         # photometric aug
+        # for stego...
+        outputs = {}
+        if self.training:
+            pos_dino_feat = self.extractor(img_pos)
+            pos_dino_code = self.enc_proj(pos_dino_feat)
+
         img = torch.cat([img, aug_img], dim=0)  # (2b, 3, h, w)
+        dino_feat = self.extractor(img)  # (2b, 384, 28, 28)
 
-        if stage == 1:  # sampling kmeans
-            import gc
-            before_dino_feat = self.extractor(img)  # (b, 384, 28, 28)
-            b, d, h, w = before_dino_feat.shape
-            before_dino_feat = before_dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
-            before_dino_feat = before_dino_feat.view(-1, d)  # (bhw, d)
+        # TODO kmeans sampling
+        # b, d, h, w = dino_feat.shape
+        # dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        # dino_feat = dino_feat.view(-1, d)  # (bhw, d)
 
-            kmeans = faiss.Kmeans(d=before_dino_feat.shape[-1], k=self.vq_num_codebooks, verbose=True, gpu=True)
-            kmeans.min_points_per_centorids = 5
-            cpu_before_dino_feat = before_dino_feat.detach().cpu().numpy().astype(np.float32)
-            kmeans.train(cpu_before_dino_feat)
-            query_vector = kmeans.centroids
+        feat = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
+        # TODO vq part
+        '''
+        quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat, it=it)  # (2b, hidden_dim, h, w)
 
-            index = faiss.IndexFlatL2(cpu_before_dino_feat.shape[-1])
-            index.add(cpu_before_dino_feat)
-            _, idx = index.search(query_vector, self.n_kmeans)  # (n_cluster, n_kmeans_pos)
+        recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
+        recon_loss = F.mse_loss(recon, dino_feat)
 
-            idx = torch.from_numpy(idx)
-            idx = idx.reshape(-1)
-            del query_vector, cpu_before_dino_feat, kmeans, index
-            gc.collect()
-            torch.cuda.empty_cache()
+        outputs["recon-loss"] = recon_loss
+        # TODO kmeans sampling
+        # quantized_feat = quantized_feat.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
 
-            feat = self.enc_proj(before_dino_feat[idx])
-            quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat)
-            recon = self.dec_proj(quantized_feat)  # (-1, hidden_dim)
-            recon_loss = F.mse_loss(recon, before_dino_feat[idx])
+        # MI loss
+        semantic_feat_img1, semantic_feat_img2 = torch.chunk(feat, chunks=2, dim=0)  # (b, hidden_dim, h, w)
+        outputs["info_nce"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
+        # outputs["margin"] = self.margin_loss(semantic_feat_img1, semantic_feat_img2)
+        '''
 
-            outputs["recon-loss"] = recon_loss
+        # split half
+        feat = torch.chunk(feat, chunks=2, dim=0)[0]
+        ori_dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]
+        # TODO vq part
+        # quantized_feat = torch.chunk(quantized_feat, chunks=2, dim=0)[0]
+        if self.training:
+            # TODO vq part -> need remove
+            outputs["stego-loss"] = self.stego_loss(ori_dino_feat, pos_dino_feat, feat, pos_dino_code)
 
-        else:
-            dino_feat = self.extractor(img)  # (2b, 384, 28, 28)
-            # TODO kmeans sampling
-            # b, d, h, w = dino_feat.shape
-            # dino_feat = dino_feat.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
-            # dino_feat = dino_feat.view(-1, d)  # (bhw, d)
-
-            feat = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
-            quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat, it=it)  # (2b, hidden_dim, h, w)
-            # quantized_feat = self.final_conv(quantized_feat)  # TODO check (2b, feat_dim, h, w)
-
-            recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
-            recon_loss = F.mse_loss(recon, dino_feat)
-
-            outputs["recon-loss"] = recon_loss
-            # TODO kmeans sampling
-            # quantized_feat = quantized_feat.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
-
-            # MI loss
-            semantic_feat_img1, semantic_feat_img2 = torch.chunk(feat, chunks=2, dim=0)  # (b, hidden_dim, h, w)
-            outputs["info_nce"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
-            # outputs["margin"] = self.margin_loss(semantic_feat_img1, semantic_feat_img2)
-
-            # split half
-            feat = torch.chunk(feat, chunks=2, dim=0)[0]
-            quantized_feat = torch.chunk(quantized_feat, chunks=2, dim=0)[0]
-        return feat, quantized_feat, outputs
+        return feat, None, outputs
+        # return feat, quantized_feat, outputs
 
 
 class EmbeddingEMA(nn.Module):
@@ -394,7 +361,7 @@ class EMACodebook(nn.Module):
             2 * (torch.matmul(z_norm, codebook_norm.t()))  # (2bhw, n_prototypes)
 
         min_encoding_indices = torch.argmin(d, dim=1)
-        distance_prob = F.softmax(-d /  self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
+        distance_prob = F.softmax(-d / self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
         vq_indices = torch.argmin(d, dim=1)
 
         if self.use_weighted_sum:

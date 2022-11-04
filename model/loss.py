@@ -488,7 +488,7 @@ def super_perm(size: int, device: torch.device):
     return perm % size
 
 
-class ContrastiveCorrelationLoss(nn.Module):
+class STEGOLoss(nn.Module):
 
     def __init__(self, cfg: dict):
         super().__init__()
@@ -529,16 +529,16 @@ class ContrastiveCorrelationLoss(nn.Module):
                 orig_code: torch.Tensor,
                 orig_code_pos: torch.Tensor,
                 ):
-        coord_shape = [orig_feats.shape[0], 11, 11, 2]
+        coord_shape = [orig_feats.shape[0], self.cfg["feature_samples"], self.cfg["feature_samples"], 2]
 
         coords1 = torch.rand(coord_shape, device=orig_feats.device) * 2 - 1
         coords2 = torch.rand(coord_shape, device=orig_feats.device) * 2 - 1
-
         feats = sample(orig_feats, coords1)
         code = sample(orig_code, coords1)
 
         feats_pos = sample(orig_feats_pos, coords2)
         code_pos = sample(orig_code_pos, coords2)
+
         pos_intra_loss, pos_intra_cd = self.helper(
             feats, feats, code, code, self.cfg["pos_intra_shift"])
         pos_inter_loss, pos_inter_cd = self.helper(
@@ -560,8 +560,5 @@ class ContrastiveCorrelationLoss(nn.Module):
 
         return (self.cfg["pos_intra_weight"] * pos_intra_loss.mean() +
                 self.cfg["pos_inter_weight"] * pos_inter_loss.mean() +
-                self.cfg["neg_inter_weight"] * neg_inter_loss.mean(),
-                pos_intra_loss.mean().item(),
-                pos_inter_loss.mean().item(),
-                neg_inter_loss.mean().item()
+                self.cfg["neg_inter_weight"] * neg_inter_loss.mean()
                 )

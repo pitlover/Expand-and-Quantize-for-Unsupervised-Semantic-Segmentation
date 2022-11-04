@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
-from model.loss import ContrastiveCorrelationLoss
+from model.loss import STEGOLoss
 
 
 class DINOStego(nn.Module):
@@ -21,7 +21,7 @@ class DINOStego(nn.Module):
         self.cluster1 = self.make_clusterer(self.feat_dim)
         self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
 
-        self.corr_loss = ContrastiveCorrelationLoss(cfg)
+        self.corr_loss = STEGOLoss(cfg)
 
     def make_clusterer(self, in_channels):
         return torch.nn.Sequential(

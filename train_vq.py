@@ -70,6 +70,7 @@ def train_epoch(
         aug_img = data["aug_img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
         data_time = time.time() - data_start_time
+        img_pos = data["img_pos"].to(device, non_blocking=True)
         # -------------------------------- loss -------------------------------- #
         if it % num_accum == 0:
             for optim in optimizers:
@@ -78,7 +79,7 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label,
+                total_loss, output, _ = model(img, aug_img, label, img_pos,
                                               it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
@@ -227,6 +228,7 @@ def valid_epoch(
         aug_img = data["aug_img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
         img_path = data["img_path"]
+
         # -------------------------------- loss -------------------------------- #
         with torch.cuda.amp.autocast(enabled=True):
             _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, it=it, is_crf=is_crf)

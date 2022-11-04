@@ -6,11 +6,11 @@ from model.dino_unseg import DINOUnSeg
 from model.evaluator import UnSegEvaluator
 
 __all__ = [
-    "DINONewVQWrapper"
+    "PQGOWrapper"
 ]
 
 
-class DINONewVQWrapper(nn.Module):
+class PQGOWrapper(nn.Module):
 
     def __init__(self,
                  cfg,
@@ -23,8 +23,9 @@ class DINONewVQWrapper(nn.Module):
 
         self.num_classes = cfg["num_classes"]
         self.extra_classes = cfg["eval"]["extra_classes"]
-        self.num_vq = self.model.num_vq
+
         # -------- Loss weight --------- #
+        self.stego_weight = cfg["loss"]["stego_weight"]
         self.recon_weight = cfg["loss"]["recon_weight"]
         self.vq_weight = cfg["loss"]["vq_weight"]
         self.info_nce_weight = cfg["loss"]["info_nce_weight"]
@@ -39,7 +40,8 @@ class DINONewVQWrapper(nn.Module):
         self.use_kmeans_sampling = cfg["model"]["vq"]["use_kmeans_sampling"]
 
         if self.output_type == "feat":
-            output_dim = self.model.feat_dim
+            output_dim = cfg["model"]["vq"]["embed_dims"][0]
+            # output_dim = self.model.feat_dim
         elif "vq" == self.output_type[:2]:
             vq_idx = int(self.output_type[2:])
             output_dim = cfg["model"]["vq"]["embed_dims"][vq_idx]
@@ -56,53 +58,40 @@ class DINONewVQWrapper(nn.Module):
                 img: torch.Tensor,
                 aug_img: torch.Tensor,
                 label: torch.Tensor,
-                it: int,
+                img_pos: torch.Tensor = None,
+                it: int = -1,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
         model_loss = torch.zeros(1, device=img.device)
         b, _, H, W = img.shape
         output = dict()
-        if not self.use_kmeans_sampling:
-            feat, feat_vqs, output = self.model(img, aug_img, it)
-            # feat: (b, 384, 28, 28)
-            # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
-            # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
 
-            if self.recon_weight > 0.0:
-                model_loss = model_loss + output["recon-loss"] * self.recon_weight
+        feat, feat_vqs, output = self.model(img, aug_img, img_pos=img_pos, it=it)
+        # feat: (b, 384, 28, 28)
+        # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
+        # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
+        if self.training and self.stego_weight > 0.0:
+            model_loss = model_loss + (output["stego-loss"] * self.stego_weight)
 
-            if self.vq_weight > 0.0:
-                model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
+        if self.recon_weight > 0.0:
+            model_loss = model_loss + output["recon-loss"] * self.recon_weight
 
-            if self.info_nce_weight > 0.0:
-                model_loss = model_loss + (output["info_nce"] * self.info_nce_weight)
+        if self.vq_weight > 0.0:
+            model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
 
-            if self.jsd_weight > 0.0:
-                model_loss = model_loss + (output["jsd"] * self.jsd_weight)
+        if self.info_nce_weight > 0.0:
+            model_loss = model_loss + (output["info_nce"] * self.info_nce_weight)
 
-                if self.entropy_weight > 0.0:
-                    model_loss = model_loss + (output["entropy"] * self.entropy_weight)
+        if self.jsd_weight > 0.0:
+            model_loss = model_loss + (output["jsd"] * self.jsd_weight)
 
-            if self.margin_weight > 0.0:
-                model_loss = model_loss + (output["margin"] * self.margin_weight)
+            if self.entropy_weight > 0.0:
+                model_loss = model_loss + (output["entropy"] * self.entropy_weight)
 
-            output["loss"] = model_loss
+        if self.margin_weight > 0.0:
+            model_loss = model_loss + (output["margin"] * self.margin_weight)
 
-        else:  # k-means sampling
-            if self.training:
-                _, _, output = self.model(img, stage=1)
-                model_loss = output["recon-loss"] * self.recon_weight
-                model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
-
-                if self.info_nce_weight > 0.0:
-                    model_loss += (output["info_nce"] * self.info_nce_weight)
-
-                    if self.entropy_weight > 0.0:
-                        model_loss += (output["entropy"] * self.entropy_weight)
-                output["loss"] = model_loss
-
-            with torch.no_grad():
-                feat, feat_vqs, _ = self.model(img)
+        output["loss"] = model_loss
 
         if self.output_type == "feat":
             out = feat.detach()
@@ -119,6 +108,3 @@ class DINONewVQWrapper(nn.Module):
         total_loss = model_loss + linear_loss + cluster_loss
 
         return total_loss, output, (linear_preds, cluster_preds)
-
-    def restart(self):
-        self.model.restart()

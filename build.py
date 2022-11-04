@@ -19,11 +19,14 @@ from model.dino_cluster import DINOCluster
 from model.dino_new_vq import DINONewVq
 from model.dino_spq import DINOSPQ
 from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
+from model.dino_pqgo import DIONPQGO
+
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
 from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
 from wrapper.NewVQWrapper import DINONewVQWrapper
+from wrapper.PQGOWrapper import PQGOWrapper
 
 
 # from wrapper.ClusterWrapper_kmeans import ClusterWrapper
@@ -35,6 +38,8 @@ def build_model(cfg: dict,
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
+    elif "pqgo" in name:
+        model = PQGOWrapper(cfg, DIONPQGO(cfg["model"], cfg["loss"]))
     elif "spq" in name:
         model = DINONewVQWrapper(cfg, DINOSPQ(cfg["model"], cfg["loss"]))
     elif "new" in name:
@@ -145,7 +150,10 @@ def build_dataset(cfg: dict, mode: str = "train") -> UnSegDataset:
         crop_type=cfg["crop_type"],
         crop_ratio=cfg.get("crop_ratio", 0.5),
         loader_crop_type=cfg.get("loader_crop_type", "center"),
-        res=cfg["res"]
+        res=cfg["res"],
+        pos_images=True if mode == "train" else False,
+        pos_labels=True if mode == "train" else False,
+        num_neighbors=cfg["num_neighbors"] if mode == "train" else -1,
     )
     return dataset
 

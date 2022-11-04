@@ -262,12 +262,18 @@ class UnSegDataset(Dataset):
                  crop_type: Optional[str],  # 5-crop
                  crop_ratio: float = 0.5,
                  loader_crop_type: str = "center",  # center, random
-                 res: int = 224
+                 res: int = 224,
+                 pos_labels: bool = False,
+                 pos_images: bool = False,
+                 num_neighbors: int = 5
                  ):
         super().__init__()
         self.mode = mode
         self.data_dir = data_dir
         self.dataset_name = dataset_name
+        self.pos_labels = pos_labels
+        self.pos_images = pos_images
+        self.num_neighbors = num_neighbors
 
         if dataset_name == "cityscapes" and crop_type is None:
             self.n_classes = 27
@@ -333,6 +339,17 @@ class UnSegDataset(Dataset):
             **extra_args
         )
 
+        feature_cache_file = join("../Datasets/cocostuff", "nns",
+                                  f"nns_vit_small_cocostuff27_{mode}_{crop_type}_224.npz")
+
+        if self.pos_labels or self.pos_images:
+            if not os.path.exists(feature_cache_file):
+                raise ValueError("could not find nn file {} please run precompute_knns".format(feature_cache_file))
+            else:
+                loaded = np.load(feature_cache_file)
+                self.nns = loaded["nns"]
+            assert len(self.dataset) == self.nns.shape[0]
+
     def __len__(self) -> int:
         return len(self.dataset)
 
@@ -352,5 +369,15 @@ class UnSegDataset(Dataset):
             "mask": mask,
             "img_path": image_path
         }
+
+        if self.pos_images or self.pos_labels:
+            ind_pos = self.nns[index][torch.randint(low=1, high=self.num_neighbors + 1, size=[]).item()]
+            img_pos, aug_img_pos, label_pos, mask_pos, image_path_pos = self.dataset[ind_pos]
+            ret["index_pos"] = ind_pos
+            ret["img_pos"] = img_pos
+            ret["aug_img_pos"] = aug_img_pos
+            ret["label_pos"] = label_pos
+            ret["mask_pos"] = mask_pos
+            ret["image_path_pos"] = image_path_pos
 
         return ret

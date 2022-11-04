@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO"
+  name: "STEGO_reproduced70"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -10,7 +10,8 @@ seed: 10
 num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
-
+is_visualize: false                           # default false, true
+visualize_path: "./visualize/stego+pq"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null
@@ -24,6 +25,11 @@ model:
     pretrained_weights: null
     dropout: true
     dim : 70
+
+
+# ---------------------------------------------------------------- #
+loss:
+  stego_weight: 1.0
   neg_inter_weight: 0.63
   pos_inter_weight: 0.25
   pos_intra_weight: 0.67
@@ -37,10 +43,6 @@ model:
   neg_samples: 5
 
 # ---------------------------------------------------------------- #
-loss:
-  stego_weight: 1.0
-
-# ---------------------------------------------------------------- #
 dataset:
   train:
     data_dir: ${data_dir}
@@ -48,6 +50,7 @@ dataset:
     crop_type: "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
+    num_neighbors: 7
     res: 224
   val:
     data_dir: ${data_dir}
@@ -58,7 +61,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 128  # total
+    batch_size: 32  # total
     num_workers: 8  # total
   val:
     batch_size: 32  # total
@@ -80,11 +83,11 @@ optimizer:
 # ---------------------------------------------------------------- #
 scheduler:
   model:
-    name: "cos"
+    name: "constant"
   cluster:
-    name: "cos"
+    name: "constant"
   linear:
-    name: "cos"
+    name: "constant"
 
 # ---------------------------------------------------------------- #
 eval:

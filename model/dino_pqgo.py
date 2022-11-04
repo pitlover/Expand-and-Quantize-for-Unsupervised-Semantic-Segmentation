@@ -622,8 +622,8 @@ class Codebook(nn.Module):
         output["vq-loss"] = q_loss
         top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
         # TODO jsd-loss check
-        output["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
-        output["entropy"] = self.entropy_loss(top_dis_prob_1, top_dis_prob_2)
+        # output["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
+        # output["entropy"] = self.entropy_loss(top_dis_prob_1, top_dis_prob_2)
         # with torch.no_grad():
         #     os.makedirs('./pq0_correlation_matrix/pq_mask_jsd0.1/512/', exist_ok=True)
         #     if i == 0 and it % 2000 == 1:

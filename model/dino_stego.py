@@ -8,20 +8,20 @@ from model.loss import STEGOLoss
 
 
 class DINOStego(nn.Module):
-    def __init__(self, cfg: dict):  # cfg["model"]
+    def __init__(self, cfg: dict):  # cfg
         super().__init__()
         self.cfg = cfg
 
-        self.extractor = DinoFeaturizer(cfg["pretrained"])
+        self.extractor = DinoFeaturizer(cfg["model"]["pretrained"])
         self.feat_dim = self.extractor.n_feats  # 384
-        self.dim = cfg["pretrained"]["dim"]
+        self.dim = cfg["model"]["pretrained"]["dim"]
         self.dropout = torch.nn.Dropout2d(p=.1)
 
         # -------- head -------- #
         self.cluster1 = self.make_clusterer(self.feat_dim)
         self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
 
-        self.corr_loss = STEGOLoss(cfg)
+        self.corr_loss = STEGOLoss(cfg["loss"])
 
     def make_clusterer(self, in_channels):
         return torch.nn.Sequential(
@@ -41,13 +41,10 @@ class DINOStego(nn.Module):
         code = self.cluster1(self.dropout(dino_feat))
         code += self.cluster2(self.dropout(dino_feat))
 
-        dino_feat_pos = self.extractor(pos_img)  # (b, 384, 28, 28) (b, d, h, w)
-        code_pos = self.cluster1(self.dropout(dino_feat_pos))
-        code_pos += self.cluster2(self.dropout(dino_feat_pos))
+        if self.training:
+            dino_feat_pos = self.extractor(pos_img)  # (b, 384, 28, 28) (b, d, h, w)
+            code_pos = self.cluster1(self.dropout(dino_feat_pos))
+            code_pos += self.cluster2(self.dropout(dino_feat_pos))
 
-        output["stego-loss"], output["self-loss"], \
-        output["knn-loss"], output["rand-loss"] = self.corr_loss(dino_feat,
-                                                                 dino_feat_pos,
-                                                                 code,
-                                                                 code_pos)
-        return dino_feat, code, output
+            output["stego-loss"] = self.corr_loss(dino_feat, dino_feat_pos,  code,  code_pos)
+        return self.dropout(dino_feat), code, output

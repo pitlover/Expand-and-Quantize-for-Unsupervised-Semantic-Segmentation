@@ -2,8 +2,8 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_baseline_512_1*1024_vq_decX"
-  notes: "1024-512"
+  name: "PQGO_baseline_512_1*512_vq_decX"
+  notes: ""
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -11,7 +11,7 @@ num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
 is_visualize: false                           # default false, true
-visualize_path: "./visualize/jsd1.0/crf/"
+visualize_path: "./visualize/stego+pq"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null                          # default null
@@ -31,7 +31,7 @@ model:
   vq:
     vq_type: "param"                          # "ema", "param"
     num_codebooks: [ 512 ] # 512
-    embed_dims: [ 1024 ]
+    embed_dims: [ 512 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true

@@ -53,7 +53,7 @@ def build_model(cfg: dict,
     elif "vae" in name:
         model = DINOUnSegWrapper(cfg, DINOVae(cfg["model"]))
     elif "stego" in name:
-        model = StegoWrapper(cfg, DINOStego(cfg["model"]))
+        model = StegoWrapper(cfg, DINOStego(cfg))
     else:
         raise ValueError(f"Unsupported type {name}.")
 

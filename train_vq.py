@@ -79,7 +79,7 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label, img_pos,
+                total_loss, output, _ = model(img=img, aug_img=aug_img, label=label, img_pos=img_pos,
                                               it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
@@ -220,7 +220,7 @@ def valid_epoch(
     result = dict()
     count = 0
     saved_data = defaultdict(list)
-    os.makedirs(cfg["visualize_path"], exist_ok=True)
+
 
     for it, data in enumerate(dataloader):
         # -------------------------------- data -------------------------------- #
@@ -244,7 +244,6 @@ def valid_epoch(
 
         # if cfg["is_visualize"] and is_crf:
         if cfg["is_visualize"] and (current_iter % 2500 == 1):
-            os.makedirs(cfg["visualize_path"], exist_ok=True)
             saved_data["img_path"].append("".join(img_path))
             saved_data["cluster_preds"].append(cluster_preds.cpu().squeeze(0))
             saved_data["linear_preds"].append(linear_preds.cpu().squeeze(0))
@@ -256,6 +255,7 @@ def valid_epoch(
 
     # if cfg["is_visualize"] and is_crf:
     if cfg["is_visualize"] and (current_iter % 2500 == 1):
+        os.makedirs(cfg["visualize_path"], exist_ok=True)
         visualization(cfg["visualize_path"] + "/" + str(current_iter), cfg["dataset_name"], saved_data, cluster_m)
 
     barrier()

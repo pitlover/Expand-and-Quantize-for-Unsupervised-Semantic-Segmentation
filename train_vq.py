@@ -78,40 +78,53 @@ def train_epoch(
 
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
+            # TODO fp16
             with torch.cuda.amp.autocast(enabled=True):
                 total_loss, output, _ = model(img=img, aug_img=aug_img, label=label, img_pos=img_pos,
                                               it=it)  # total_loss, output, (linear_preds, cluster_preds)
+            # total_loss, output, _ = model(img=img, aug_img=aug_img, label=label, img_pos=img_pos,
+            #                               it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
+            # loss.backward() # TODO fp16
             scaler.scale(loss).backward()
+
             backward_time = time.time() - backward_start_time
 
             step_start_time = time.time()
-            scaler.unscale_(optimizers[0])
+            scaler.unscale_(optimizers[0]) # TODO fp16
             grad_norm = clip_grad_norm_(model_m.model.parameters(), max_norm=clip_grad)
 
             for optim, sched in zip(optimizers, schedulers):
                 scaler.step(optim)
                 scaler.update()
+                # optim.step() # TODO fp16
                 sched.step()
             step_time = time.time() - step_start_time
 
             current_iter += 1
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
+                # TODO fp16
                 with torch.cuda.amp.autocast(enabled=True):
                     total_loss, output, _ = model(img, aug_img,
                                                   label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
+                # total_loss, output, _ = model(img, aug_img,
+                #                               label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
-                scaler.scale(loss).backward()
+                loss.backward() # TODO fp16
+                # scaler.scale(loss).backward()
         else:  # non-update step
             # and not DDP
-            with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label,
-                                              it=it)  # total_loss, output, (linear_preds, cluster_preds)
-
+            # TODO fp16
+            # with torch.cuda.amp.autocast(enabled=True):
+            #     total_loss, output, _ = model(img, aug_img, label,
+            #                                   it=it)  # total_loss, output, (linear_preds, cluster_preds)
+            total_loss, output, _ = model(img, aug_img, label,
+                                          it=it)  # total_loss, output, (linear_preds, cluster_preds)
             loss = total_loss / num_accum
+            # loss.backward() # TODO fp16
             scaler.scale(loss).backward()
 
         # -------------------------------- print -------------------------------- #
@@ -230,8 +243,10 @@ def valid_epoch(
         img_path = data["img_path"]
 
         # -------------------------------- loss -------------------------------- #
+        # TODO fp16
         with torch.cuda.amp.autocast(enabled=True):
             _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, it=it, is_crf=is_crf)
+        # _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, it=it, is_crf=is_crf)
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 

@@ -38,13 +38,15 @@ class DINOStego(nn.Module):
         output = dict()
 
         dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
-        code = self.cluster1(self.dropout(dino_feat))
-        code += self.cluster2(self.dropout(dino_feat))
+        dino_feat = self.dropout(dino_feat)
+        code = self.cluster1(dino_feat)
+        code += self.cluster2(dino_feat)
 
         if self.training:
             dino_feat_pos = self.extractor(pos_img)  # (b, 384, 28, 28) (b, d, h, w)
-            code_pos = self.cluster1(self.dropout(dino_feat_pos))
-            code_pos += self.cluster2(self.dropout(dino_feat_pos))
+            dino_feat_pos = self.dropout(dino_feat_pos)
+            code_pos = self.cluster1(dino_feat_pos)
+            code_pos += self.cluster2(dino_feat_pos)
 
             output["stego-loss"] = self.corr_loss(dino_feat, dino_feat_pos,  code,  code_pos)
-        return self.dropout(dino_feat), code, output
+        return dino_feat, code, output

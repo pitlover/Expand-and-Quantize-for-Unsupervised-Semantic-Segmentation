@@ -28,13 +28,6 @@ class PQGOWrapper(nn.Module):
         self.stego_weight = cfg["loss"]["stego_weight"]
         self.recon_weight = cfg["loss"]["recon_weight"]
         self.vq_weight = cfg["loss"]["vq_weight"]
-        self.info_nce_weight = cfg["loss"]["info_nce_weight"]
-        self.jsd_weight = cfg["loss"]["jsd_weight"]
-        self.margin_weight = cfg["loss"]["margin_weight"]
-        self.entropy_weight = 0.0
-
-        if self.jsd_weight > 0.0:
-            self.entropy_weight = cfg["loss"]["jsd"]["entropy_weight"]
 
         self.output_type = cfg["eval"]["output_type"]
         self.use_kmeans_sampling = cfg["model"]["vq"]["use_kmeans_sampling"]
@@ -66,7 +59,7 @@ class PQGOWrapper(nn.Module):
         b, _, H, W = img.shape
         output = dict()
 
-        feat, feat_vqs, output = self.model(img, aug_img, img_pos=img_pos, it=it)
+        code, feat_vqs, output = self.model(img=img, aug_img=aug_img, img_pos=img_pos, it=it)
         # feat: (b, 384, 28, 28)
         # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
         # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
@@ -79,22 +72,10 @@ class PQGOWrapper(nn.Module):
         if self.vq_weight > 0.0:
             model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
 
-        if self.info_nce_weight > 0.0:
-            model_loss = model_loss + (output["info_nce"] * self.info_nce_weight)
-
-        if self.jsd_weight > 0.0:
-            model_loss = model_loss + (output["jsd"] * self.jsd_weight)
-
-            if self.entropy_weight > 0.0:
-                model_loss = model_loss + (output["entropy"] * self.entropy_weight)
-
-        if self.margin_weight > 0.0:
-            model_loss = model_loss + (output["margin"] * self.margin_weight)
-
         output["loss"] = model_loss
 
         if self.output_type == "feat":
-            out = feat.detach()
+            out = code.detach()
         elif "vq" == self.output_type[:2]:
             out = feat_vqs.detach()  # (b, d, h, w)
         else:

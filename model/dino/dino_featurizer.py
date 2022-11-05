@@ -21,8 +21,8 @@ class DinoFeaturizer(nn.Module):
         self.backbone.eval()
 
         drop_prob = cfg.get("drop_prob", 0.1)
-        self.is_dropout = cfg["dropout"]
-        self.dropout = torch.nn.Dropout2d(p=drop_prob)
+        # self.is_dropout = cfg["dropout"]
+        # self.dropout = torch.nn.Dropout2d(p=drop_prob)
 
         if arch == "vit_small" and patch_size == 16:
             url = "dino_deitsmall16_pretrain/dino_deitsmall16_pretrain.pth"
@@ -50,7 +50,6 @@ class DinoFeaturizer(nn.Module):
             state_dict = torch.hub.load_state_dict_from_url(url="https://dl.fbaipublicfiles.com/dino/" + url)
             self.backbone.load_state_dict(state_dict, strict=True)
 
-
         if arch == "vit_small":
             self.n_feats = 384
         else:
@@ -71,6 +70,7 @@ class DinoFeaturizer(nn.Module):
         assert (h % self.patch_size == 0) and (w % self.patch_size == 0)
         feat_h, feat_w = h // self.patch_size, w // self.patch_size
 
+        self.backbone.eval()
         if self.freeze_backbone:
             with torch.no_grad():
                 feat, _, _ = self.backbone.get_intermediate_feat(img, n=1)
@@ -79,8 +79,6 @@ class DinoFeaturizer(nn.Module):
 
         feat = feat[0]  # (b, 1+28x28, 384)
         feat = feat[:, 1:, :].reshape(b, feat_h, feat_w, -1).permute(0, 3, 1, 2).contiguous()  # (b, 384, 28, 28)
-
-
 
         return feat
 

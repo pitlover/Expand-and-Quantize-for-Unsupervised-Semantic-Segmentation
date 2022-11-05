@@ -28,14 +28,20 @@ class DIONPQGO(nn.Module):
         self.hidden_dim = cfg["vq"]["embed_dims"][0]
         self.is_dropout = cfg["pretrained"]["dropout"]
         self.dropout = nn.Dropout2d(p=cfg["pretrained"]["drop_prob"])
-        # -------- semantic-encoder -------- #
-        num_enc_blocks = cfg["enc_num_blocks"]
-        semantic_enc_proj = []
-        for i in range(num_enc_blocks):
-            semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
-        self.enc_proj = nn.Sequential(*semantic_enc_proj)
 
-        # -------- vq -------- #
+        # # -------- head -------- #
+        self.cluster1 = self.make_clusterer(self.feat_dim)
+        self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
+
+
+        # -------- semantic-encoder -------- #
+        # num_enc_blocks = cfg["enc_num_blocks"]
+        # semantic_enc_proj = []
+        # for i in range(num_enc_blocks):
+        #     semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
+        # self.enc_proj = nn.Sequential(*semantic_enc_proj)
+
+        # # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
         vq_embed_dims = cfg["vq"]["embed_dims"]
         assert len(vq_num_codebooks) == len(vq_embed_dims)
@@ -101,6 +107,16 @@ class DIONPQGO(nn.Module):
         #                                 )
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
 
+    def make_clusterer(self, in_channels):
+        return torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, 70, (1, 1)))
+
+    def make_nonlinear_clusterer(self, in_channels):
+        return torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, in_channels, (1, 1)),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(in_channels, 70, (1, 1)))
+
     def forward(self, img: torch.Tensor,
                 aug_img: torch.Tensor = None,
                 img_pos: torch.Tensor = None,
@@ -109,43 +125,35 @@ class DIONPQGO(nn.Module):
         # photometric aug
         # for stego...
         outputs = {}
+
+        dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
+        dino_feat = self.dropout(dino_feat)
+        code = self.cluster1(dino_feat)
+        code += self.cluster2(dino_feat)
+
         if self.training:
-            pos_dino_feat = self.extractor(img_pos)
+            dino_feat_pos = self.extractor(img_pos)  # (b, 384, 28, 28) (b, d, h, w)
+            dino_feat_pos = self.dropout(dino_feat_pos)
+            code_pos = self.cluster1(dino_feat_pos)
+            code_pos += self.cluster2(dino_feat_pos)
 
-            if self.is_dropout:
-                pos_dino_feat = self.dropout(pos_dino_feat)
-            pos_dino_code = self.enc_proj(pos_dino_feat)
-
-        # img = torch.cat([img, aug_img], dim=0)  # (2b, 3, h, w)
-        dino_feat = self.extractor(img)  # (2b, 384, 28, 28)
-
-        if self.is_dropout:
-            dino_feat = self.dropout(dino_feat)
-        feat = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
-
-        quantized_feat, outputs, distance_prob = self.vq_blocks[0](feat, it=it)  # (2b, hidden_dim, h, w)
-
-        # recon = self.dec_proj(quantized_feat)  # (2b, 384, 28, 28)
-        # recon_loss = F.mse_loss(recon, dino_feat)
+        # dino_feat = self.extractor(img)  # (2b, 384, 28, 28)
+        # dino_feat = self.dropout(dino_feat)
+        # code = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
         #
-        # outputs["recon-loss"] = recon_loss
+        # if self.training:
+        #     dino_feat_pos = self.extractor(img_pos)
+        #     dino_feat_pos = self.dropout(dino_feat_pos)
+        #     code_pos = self.enc_proj(dino_feat_pos)
+        quantized_feat, outputs, distance_prob = self.vq_blocks[0](code, it=it)  # (2b, hidden_dim, h, w)
 
-        # MI loss
-        # semantic_feat_img1, semantic_feat_img2 = torch.chunk(feat, chunks=2, dim=0)  # (b, hidden_dim, h, w)
-        # outputs["info_nce"] = self.infonce_loss(semantic_feat_img1, semantic_feat_img2)
-        # outputs["margin"] = self.margin_loss(semantic_feat_img1, semantic_feat_img2)
-
-        # split half
-        # feat = torch.chunk(feat, chunks=2, dim=0)[0]
-        # ori_dino_feat = torch.chunk(dino_feat, chunks=2, dim=0)[0]
         # TODO vq part
-        # quantized_feat = torch.chunk(quantized_feat, chunks=2, dim=0)[0]
         if self.training:
             # TODO vq part -> need remove
-            outputs["stego-loss"] = self.stego_loss(dino_feat, pos_dino_feat, feat, pos_dino_code)
+            outputs["stego-loss"] = self.stego_loss(dino_feat, dino_feat_pos, code, code_pos)
 
-        # return feat, None, outputs
-        return feat, quantized_feat, outputs
+        # return code, None, outputs
+        return code, quantized_feat, outputs
 
 
 class EmbeddingEMA(nn.Module):

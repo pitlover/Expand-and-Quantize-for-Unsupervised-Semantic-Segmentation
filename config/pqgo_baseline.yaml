@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_baseline_512_1*512_vq_decX"
+  name: "PQGO_baseline_512_32*32_decX"
   notes: ""
 
 # ---------------------------------------------------------------- #
@@ -28,10 +28,11 @@ model:
   enc_num_blocks: 1
   dec_num_blocks: 3
   last_norm: false
+
   vq:
     vq_type: "param"                          # "ema", "param"
     num_codebooks: [ 512 ] # 512
-    embed_dims: [ 512 ]
+    embed_dims: [ 1024 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
@@ -40,7 +41,7 @@ model:
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 1 ]             # 64               # 1 for vq
+    num_pq: [ 32 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -98,21 +99,21 @@ dataloader:
     batch_size: 32  # total
     num_workers: 8  # total
   val:
-    batch_size: 16  # total
+    batch_size: 32  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
   model:
     name: "adam"
-    lr: 3.0e-4
+    lr: 5.0e-4
     weight_decay: 0.0
   cluster:
     name: "adam"
-    lr: 3.0e-3
+    lr: 5.0e-3
   linear:
     name: "adam"
-    lr: 3.0e-3
+    lr: 5.0e-3
 
 # ---------------------------------------------------------------- #
 scheduler:
@@ -133,5 +134,5 @@ train:
   max_epochs: 3
   print_interval_iters: 25
   valid_interval_iters: 100
-  clip_grad: 1.0      # default 1.0
+  clip_grad: 10.0      # default 1.0
   num_accum: 1

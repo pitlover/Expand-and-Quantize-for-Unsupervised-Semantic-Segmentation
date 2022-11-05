@@ -42,6 +42,7 @@ class StegoWrapper(nn.Module):
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
         dino_feat, code, output = self.model(img, img_pos)
         model_loss = 0
+
         if self.training:
             model_loss = output["stego-loss"] * self.stego_weight
             output["loss"] = model_loss

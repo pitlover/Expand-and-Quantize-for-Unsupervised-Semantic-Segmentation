@@ -6,6 +6,7 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from utils.dist_utils import is_distributed_set, get_rank, get_world_size
+# from data.data import UnSegDataset
 from data.dataset_aug import UnSegDataset
 # from data.dataset import UnSegDataset
 
@@ -27,10 +28,6 @@ from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
 from wrapper.NewVQWrapper import DINONewVQWrapper
 from wrapper.PQGOWrapper import PQGOWrapper
-
-
-# from wrapper.ClusterWrapper_kmeans import ClusterWrapper
-
 
 def build_model(cfg: dict,
                 name: str = None,
@@ -96,9 +93,10 @@ def build_optimizer(cfg: dict, params):
     optimizer_type = cfg["name"].lower()
     if optimizer_type == "adam":
         optimizer = Adam(params,
-                         lr=cfg["lr"],
-                         betas=cfg.get("betas", (0.9, 0.999)),
-                         weight_decay=cfg.get("weight_decay", 0.0))
+                         lr=cfg["lr"])
+                         # lr=cfg["lr"],
+                         # betas=cfg.get("betas", (0.9, 0.999)),
+                         # weight_decay=cfg.get("weight_decay", 0.0))
     elif optimizer_type == "adamw":
         optimizer = AdamW(params,
                           lr=cfg["lr"],
@@ -156,7 +154,6 @@ def build_dataset(cfg: dict, mode: str = "train") -> UnSegDataset:
         num_neighbors=cfg["num_neighbors"] if mode == "train" else -1,
     )
     return dataset
-
 
 def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> DataLoader:
     # cfg = cfg["dataloader"]

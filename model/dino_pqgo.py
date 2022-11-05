@@ -109,13 +109,13 @@ class DIONPQGO(nn.Module):
 
     def make_clusterer(self, in_channels):
         return torch.nn.Sequential(
-            torch.nn.Conv2d(in_channels, 70, (1, 1)))
+            torch.nn.Conv2d(in_channels, self.hidden_dim, (1, 1)))
 
     def make_nonlinear_clusterer(self, in_channels):
         return torch.nn.Sequential(
             torch.nn.Conv2d(in_channels, in_channels, (1, 1)),
             torch.nn.ReLU(),
-            torch.nn.Conv2d(in_channels, 70, (1, 1)))
+            torch.nn.Conv2d(in_channels, self.hidden_dim, (1, 1)))
 
     def forward(self, img: torch.Tensor,
                 aug_img: torch.Tensor = None,
@@ -507,9 +507,8 @@ class Codebook(nn.Module):
             self.update_indices = None
             self.update_candidates = None
 
-    def forward(self, z: torch.Tensor, i: int, it: int):  # i-th pq, iteration
+    def forward(self, z: torch.Tensor):  # i-th pq, iteration
         output = dict()
-
         self.vq_count = self.vq_count.to(z.device)
         # TODO kmeans_sampling
         # z_flat = z
@@ -628,18 +627,7 @@ class Codebook(nn.Module):
         z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
 
         output["vq-loss"] = q_loss
-        top_dis_prob_1, top_dis_prob_2 = torch.chunk(distance_prob, chunks=2, dim=0)  # (2bhw, K) -> (2, bhw, K)
-        # TODO jsd-loss check
-        # output["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
-        # output["entropy"] = self.entropy_loss(top_dis_prob_1, top_dis_prob_2)
-        # with torch.no_grad():
-        #     os.makedirs('./pq0_correlation_matrix/pq_mask_jsd0.1/512/', exist_ok=True)
-        #     if i == 0 and it % 2000 == 1:
-        #         # codebook_norm : (n_codebook, dim)
-        #         corr_matrix_i = torch.matmul(codebook_norm, codebook_norm.T)
-        #         torch.save(corr_matrix_i, f'./pq0_correlation_matrix/pq_mask_jsd0.1/512/{self.pq_dropout}_{it}.pt')
-        #         del corr_matrix_i
-        #         torch.cuda.empty_cache()
+
         return z_q, output, distance_prob
 
 
@@ -679,13 +667,13 @@ class ProductQuantizerWrapper(nn.Module):
     def forward(self, z: torch.Tensor, it: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
         # b, c, h, w = z.shape
         z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
+
         z_quantized = list()
         outputs = dict()
         distance_prob = list()
 
         for i in range(self.num_pq):
-            q_i, output_i, prob_i = self.quantizers[i](z_split[i], i,
-                                                       it=it)  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
+            q_i, output_i, prob_i = self.quantizers[i](z_split[i])  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
             z_quantized.append(q_i)
             if i == 0:
                 for k, v in output_i.items():

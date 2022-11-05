@@ -2,8 +2,9 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_baseline_512_1*1024_decX"
+  name: "PQGO_baseline_1024_1*256_decX"
   notes: ""
+  tags: ${dataset_name}
 
 # ---------------------------------------------------------------- #
 seed: 10
@@ -31,10 +32,10 @@ model:
 
   vq:
     vq_type: "param"                          # "ema", "param"
-    num_codebooks: [ 512 ] # 512
-    embed_dims: [ 1024 ]
+    num_codebooks: [ 1024 ] # 512
+    embed_dims: [ 256 ]
     beta: 0.25
-    normalize: "l2"                           # l2, z_norm, z_trainable, none
+    normalize: "none"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
     use_weighted_sum: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
@@ -61,15 +62,25 @@ loss:
     temperature: 1.0                          # TODO need check
     cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
   jsd:
-    temperature: 1.0
+    temperature: 0.1
     entropy_weight: 0.01
   stego:
+    # cocostuff27 with vit-small
     neg_inter_weight: 0.63
     pos_inter_weight: 0.25
     pos_intra_weight: 0.67
     neg_inter_shift: 0.66
     pos_inter_shift: 0.02
     pos_intra_shift: 0.08
+
+    # cocostuff27 with vit-base
+    # neg_inter_weight: 0.15
+    # pos_inter_weight: 1
+    # pos_intra_weight: 0.1
+    # neg_inter_shift: 1
+    # pos_inter_shift: 0.2
+    # pos_intra_shift: 0.12
+
     zero_clamp: true
     pointwise: true
     stabilize: false

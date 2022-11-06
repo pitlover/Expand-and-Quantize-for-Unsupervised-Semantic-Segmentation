@@ -1,4 +1,10 @@
 save_dir: "output"
+wandb:
+  project: "Jigmentation"
+  mode: "online"
+  name: "PQGO_baseline_1024_32*4_decX"
+  notes: ""
+  tags: ${dataset_name}
 # ---------------------------------------------------------------- #
 seed: 10
 num_classes: 27
@@ -6,13 +12,6 @@ dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
 is_visualize: false                           # default false, true
 visualize_path: "./visualize/stego+pq"
-# ---------------------------------------------------------------- #
-wandb:
-  project: "Jigmentation"
-  mode: "online"
-  name: "PQGO_baseline_1024_1*256_decX"
-  notes: ""
-  tags: ${dataset_name}
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null                          # default null
@@ -33,7 +32,7 @@ model:
   vq:
     vq_type: "param"                          # "ema", "param"
     num_codebooks: [ 1024 ] # 512
-    embed_dims: [ 256 ]
+    embed_dims: [ 128 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
@@ -42,7 +41,7 @@ model:
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 1 ]             # 64               # 1 for vq
+    num_pq: [ 32 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true

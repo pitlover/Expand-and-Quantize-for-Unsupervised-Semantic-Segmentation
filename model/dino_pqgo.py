@@ -13,7 +13,6 @@ from model.blocks.resnet import EncResBlock, DecResBlock
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
-import faiss
 from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss, STEGOLoss
 
 
@@ -313,13 +312,6 @@ class EMACodebook(nn.Module):
                 centroids = torch.from_numpy(centroids).float().to(z.device)
                 self.codebook.weight.data.copy_(centroids)
                 self.codebook.weight_avg.data.copy_(centroids)
-                # kmeans = faiss.Kmeans(d=z_flat.shape[-1], k=self.num_codebook_vectors, verbose=True, gpu=True)
-                # cpu_z_flat = z_flat.detach().cpu().numpy().astype(np.float32)
-                # kmeans.train(cpu_z_flat)
-                # centroids = torch.from_numpy(kmeans.centroids).float().to(z.device)
-                # self.embedding.weight.data.copy_(centroids)
-                # del centroids, cpu_z_flat, kmeans
-                # torch.cuda.empty_cache()
 
             elif self.need_initialized == "uni":
                 nn.init.xavier_uniform_(self.codebook.weight)

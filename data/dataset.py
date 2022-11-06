@@ -243,6 +243,7 @@ class UnSegDataset(Dataset):
                  mode: str,  # train, val
                  data_dir: str,
                  dataset_name: str,
+                 model_type: str,  # vit_small, vit_base
                  crop_type: Optional[str],  # 5-crop
                  crop_ratio: float = 0.5,
                  loader_crop_type: str = "center",  # center, random

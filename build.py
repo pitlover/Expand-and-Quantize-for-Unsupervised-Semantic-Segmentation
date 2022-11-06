@@ -140,11 +140,11 @@ def build_scheduler(cfg: dict,
 def build_dataset(cfg: dict, mode: str = "train") -> UnSegDataset:
     # cfg = cfg["dataset"]
     cfg = cfg[mode]
-
     dataset = UnSegDataset(
         mode=mode,
         data_dir=cfg["data_dir"],
         dataset_name=cfg["dataset_name"],
+        model_type=cfg["model_type"],
         crop_type=cfg["crop_type"],
         crop_ratio=cfg.get("crop_ratio", 0.5),
         loader_crop_type=cfg.get("loader_crop_type", "center"),

@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_baseline_1024_32*4_decX"
+  name: "PQGO_baseline_256_8*64_decX"
   notes: ""
   tags: ${dataset_name}
 # ---------------------------------------------------------------- #
@@ -31,8 +31,8 @@ model:
 
   vq:
     vq_type: "param"                          # "ema", "param"
-    num_codebooks: [ 1024 ] # 512
-    embed_dims: [ 128 ]
+    num_codebooks: [ 256 ] # 512
+    embed_dims: [ 512 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
@@ -40,8 +40,8 @@ model:
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
-    eps: 1.0e-5
-    num_pq: [ 32 ]             # 64               # 1 for vq
+    eps: 1.0e-
+    num_pq: [ 8 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -92,6 +92,7 @@ dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
+    model_type : ${model.pretrained.model_type}
     crop_type: "five"                         # null, "five"
     crop_ratio: 0.5
     loader_crop_type: "center"

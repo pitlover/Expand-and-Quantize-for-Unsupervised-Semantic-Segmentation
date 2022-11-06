@@ -13,7 +13,7 @@ from model.blocks.resnet import EncResBlock, DecResBlock
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
-import faiss
+# import faiss
 from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss
 
 

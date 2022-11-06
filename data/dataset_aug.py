@@ -259,6 +259,7 @@ class UnSegDataset(Dataset):
                  mode: str,  # train, val
                  data_dir: str,
                  dataset_name: str,
+                 model_type : str, # vit_small, vit_base
                  crop_type: Optional[str],  # 5-crop
                  crop_ratio: float = 0.5,
                  loader_crop_type: str = "center",  # center, random
@@ -340,7 +341,7 @@ class UnSegDataset(Dataset):
         )
 
         feature_cache_file = join("../Datasets/cocostuff", "nns",
-                                  f"nns_vit_small_cocostuff27_{mode}_{crop_type}_224.npz")
+                                  f"nns_{model_type}_cocostuff27_{mode}_{crop_type}_224.npz")
 
         if self.pos_labels or self.pos_images:
             if not os.path.exists(feature_cache_file):

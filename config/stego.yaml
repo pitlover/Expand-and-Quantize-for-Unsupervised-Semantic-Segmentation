@@ -39,7 +39,7 @@ loss:
   # pos_intra_shift: 0.08
 
   # cocostuff27 with vit-base
-  neg_inter_weight: 0.15
+  neg_inter_weight: 0.1538476246415498
   pos_inter_weight: 1
   pos_intra_weight: 0.1
   neg_inter_shift: 1
@@ -74,7 +74,7 @@ dataloader:
     batch_size: 32  # total
     num_workers: 8  # total
   val:
-    batch_size: 32  # total
+    batch_size: 16  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #

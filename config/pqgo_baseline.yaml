@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_1024_32*8_decX_restart"
+  name: "PQGO_256_8*16_decX"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -32,18 +32,18 @@ model:
 
   vq:
     vq_type: "param"                          # "ema", "param"
-    num_codebooks: [ 1024 ] # 512
-    embed_dims: [ 256 ]
+    num_codebooks: [ 256 ] # 512
+    embed_dims: [ 128 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
-    use_restart: true                        # default false, true
+    use_restart: false                        # default false, true
     use_split: false                        # default false, true
     use_weighted_sum: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-5
-    num_pq: [ 32 ]             # 64               # 1 for vq
+    num_pq: [ 8 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -110,10 +110,10 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 32  # total
+    batch_size: 16  # total
     num_workers: 8  # total
   val:
-    batch_size: 16  # total
+    batch_size: 8  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #

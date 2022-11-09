@@ -52,7 +52,7 @@ class DinoFeaturizer(nn.Module):
 
         if arch == "vit_small":
             self.n_feats = 384
-        else:
+        elif arch == "vit_base":
             self.n_feats = 768
 
     def train(self, mode: bool = True):

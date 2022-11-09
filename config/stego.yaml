@@ -4,6 +4,8 @@ wandb:
   mode: "online"
   name: "STEGO_70_vit-base"
   notes: ""
+  tags_dataset: ${dataset_name}
+  tags_model: ${model.pretrained.model_type}
 
 # ---------------------------------------------------------------- #
 seed: 10

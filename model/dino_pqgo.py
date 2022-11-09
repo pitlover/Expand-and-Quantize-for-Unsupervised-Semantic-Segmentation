@@ -32,7 +32,6 @@ class DIONPQGO(nn.Module):
         self.cluster1 = self.make_clusterer(self.feat_dim)
         self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
 
-
         # -------- semantic-encoder -------- #
         # num_enc_blocks = cfg["enc_num_blocks"]
         # semantic_enc_proj = []
@@ -51,6 +50,7 @@ class DIONPQGO(nn.Module):
         self.normalize = cfg["vq"].get("normalize", "none")
         self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
         self.use_restart = cfg["vq"].get("use_restart", False)
+        self.use_split = cfg["vq"].get("use_split", False)
         self.need_initialized = cfg["vq"].get("need_initialized", False)
         self.pq_dropout = cfg["vq"].get("pq_dropout", 0.0)
         self.jsd_ts = cfg_loss["jsd"].get("temperature", 1.0)
@@ -58,6 +58,7 @@ class DIONPQGO(nn.Module):
         vq_kwargs = dict(beta=self.beta,
                          normalize=self.normalize,
                          use_restart=self.use_restart,
+                         use_split=self.use_split,
                          use_weighted_sum=self.use_weighted_sum,
                          need_initialized=self.need_initialized,
                          pq_dropout=self.pq_dropout,
@@ -98,12 +99,7 @@ class DIONPQGO(nn.Module):
         #         DecResBlock(self.hidden_dim,
         #                     self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
         # self.dec_proj = nn.Sequential(*dec_proj)
-        # # -------- loss -------- #
-        # self.infonce_loss = InfoNCELoss(normalize=self.cfg_loss["info_nce"].get("normalize", "l2"),
-        #                                 neg_sample=self.cfg_loss["info_nce"].get("neg_sample", 0),
-        #                                 temperature=self.cfg_loss["info_nce"].get("temperature", 1.0),
-        #                                 cal_type=self.cfg_loss["info_nce"].get("cal_type", "random")
-        #                                 )
+        # -------- loss -------- #
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
 
     def make_clusterer(self, in_channels):
@@ -216,6 +212,7 @@ class EMACodebook(nn.Module):
                  beta=0.25,
                  normalize: str = "none",
                  use_restart: bool = False,
+                 use_split: bool = False,
                  use_weighted_sum: bool = False,
                  need_initialized: str = "kmeans",
                  pq_dropout: float = 0.0,
@@ -250,6 +247,7 @@ class EMACodebook(nn.Module):
             self.z_mean = nn.Parameter(torch.zeros(self.latent_dim))
             self.z_log_var = nn.Parameter(torch.zeros(self.latent_dim))
         self.use_restart = use_restart
+        self.use_split = use_split
         self.need_initialized = need_initialized
 
         # ----- JSD ------ #
@@ -288,6 +286,44 @@ class EMACodebook(nn.Module):
 
             self.update_indices = None
             self.update_candidates = None
+
+    @torch.no_grad()
+    def split(self, vq_current_count: torch.Tensor) -> int:
+        """Split replace dead entries
+        :param vq_current_count:        (K,)
+        :return:                        codebooks that are not used
+        """
+        update_indices = torch.nonzero(vq_current_count == 0, as_tuple=True)[0]
+        if len(update_indices) == 0:
+            return 0
+        n_update = len(update_indices)
+        update_indices = update_indices[torch.randperm(n_update)]
+
+        vq_total_count = self.codebook.vq_count  # (K,)
+        vq_weight = self.codebook.weight  # (K, d)
+        vq_weight_avg = self.codebook.weight_avg  # (K, d)
+
+        _, vq_total_count_sort = torch.sort(vq_total_count, dim=0, descending=True)
+        vq_total_count_sort = vq_total_count_sort[:n_update]
+
+        vq_total_count_candidate = vq_total_count.detach().clone()
+        vq_weight_candidate = vq_weight.detach().clone()
+        vq_weight_avg_candidate = vq_weight_avg.detach().clone()
+
+        noise = torch.randn(n_update, self.embed_dim, dtype=vq_weight.dtype, device=vq_weight.device).mul_(0.02)
+        vq_weight_candidate[update_indices] = vq_weight[vq_total_count_sort] + noise
+        vq_weight_candidate[vq_total_count_sort] = vq_weight[vq_total_count_sort] - noise
+        vq_total_count_candidate[update_indices] = vq_total_count[vq_total_count_sort] / 2.0
+        vq_total_count_candidate[vq_total_count_sort] = vq_total_count[vq_total_count_sort] / 2.0
+        vq_weight_avg_candidate[update_indices] = vq_weight_avg[vq_total_count_sort] / 2.0
+        vq_weight_avg_candidate[vq_total_count_sort] = vq_weight_avg[vq_total_count_sort] / 2.0
+
+        self.codebook.vq_count.data.copy_(vq_total_count_candidate.data)
+        self.codebook.weight.data.copy_(vq_weight_candidate.data)
+        self.codebook.weight_avg.data.copy_(vq_weight_avg_candidate.data)
+
+        self.vq_count.fill_(0)
+        return n_update
 
     def forward(self, z: torch.Tensor, i: int, it: int):  # i-th pq, iteration
         output = dict()
@@ -388,10 +424,9 @@ class EMACodebook(nn.Module):
                 if self.use_restart:
                     self.prepare_restart(vq_current_count, z_flat)
 
-                # if self.use_split:
-                #     n_split = self.split(vq_current_count)  # not-used count
-                # else:
-                #     n_split = len(torch.nonzero(vq_current_count == 0, as_tuple=True)[0])
+                if self.use_split:
+                    self.split(vq_current_count)
+
                 output["codebook-usage"] = (codebook_norm.shape[0] - len(
                     torch.nonzero(vq_current_count == 0, as_tuple=True)[0])) / codebook_norm.shape[0]  # used ratio
 
@@ -430,6 +465,7 @@ class Codebook(nn.Module):
                  beta=0.25,
                  normalize: str = "none",
                  use_restart: bool = False,
+                 use_split: bool = False,
                  use_weighted_sum: bool = False,
                  need_initialized: str = "kmeans",
                  pq_dropout: float = 0.0,
@@ -461,6 +497,7 @@ class Codebook(nn.Module):
             self.z_mean = nn.Parameter(torch.zeros(self.latent_dim))
             self.z_log_var = nn.Parameter(torch.zeros(self.latent_dim))
         self.use_restart = use_restart
+        self.use_split = use_split
         self.need_initialized = need_initialized
         # ----- JSD ------ #
         self.jsd_loss = JSDLoss()
@@ -499,6 +536,38 @@ class Codebook(nn.Module):
             self.update_indices = None
             self.update_candidates = None
 
+    @torch.no_grad()
+    def split(self, vq_current_count: torch.Tensor) -> int:
+        """Split replace dead entries
+        :param vq_current_count:        (K,)
+        :return:                        codebooks that are not used
+        """
+        update_indices = torch.nonzero(vq_current_count == 0, as_tuple=True)[0]
+        if len(update_indices) == 0:
+            return 0
+        n_update = len(update_indices)
+        update_indices = update_indices[torch.randperm(n_update)]
+
+        vq_total_count = self.vq_count  # (K,)
+        vq_weight = self.embedding.weight  # (K, d)
+
+        _, vq_total_count_sort = torch.sort(vq_total_count, dim=0, descending=True)
+        vq_total_count_sort = vq_total_count_sort[:n_update]
+
+        vq_total_count_candidate = vq_total_count.detach().clone()
+        vq_weight_candidate = vq_weight.detach().clone()
+
+        noise = torch.randn(n_update, self.latent_dim, dtype=vq_weight.dtype, device=vq_weight.device).mul_(0.02)
+        vq_weight_candidate[update_indices] = vq_weight[vq_total_count_sort] + noise
+        vq_weight_candidate[vq_total_count_sort] = vq_weight[vq_total_count_sort] - noise
+        vq_total_count_candidate[update_indices] = vq_total_count[vq_total_count_sort] / 2.0
+        vq_total_count_candidate[vq_total_count_sort] = vq_total_count[vq_total_count_sort] / 2.0
+
+        self.vq_count.data.copy_(vq_total_count_candidate.data)
+        self.embedding.weight.data.copy_(vq_weight_candidate.data)
+
+        self.vq_count.fill_(0)
+        return n_update
     def forward(self, z: torch.Tensor):  # i-th pq, iteration
         output = dict()
         self.vq_count = self.vq_count.to(z.device)
@@ -520,13 +589,6 @@ class Codebook(nn.Module):
                 centroids = np.array(clustering.cluster_centers_)
                 centroids = torch.from_numpy(centroids).float().to(z.device)
                 self.embedding.weight.data.copy_(centroids)
-                # kmeans = faiss.Kmeans(d=z_flat.shape[-1], k=self.num_codebook_vectors, verbose=True, gpu=True)
-                # cpu_z_flat = z_flat.detach().cpu().numpy().astype(np.float32)
-                # kmeans.train(cpu_z_flat)
-                # centroids = torch.from_numpy(kmeans.centroids).float().to(z.device)
-                # self.embedding.weight.data.copy_(centroids)
-                # del centroids, cpu_z_flat, kmeans
-                # torch.cuda.empty_cache()
 
             elif self.need_initialized == "uni":
                 nn.init.xavier_uniform_(self.embedding.weight)
@@ -597,7 +659,7 @@ class Codebook(nn.Module):
                 # output.update(vq_current_hist)
 
                 if self.use_restart:
-                    self.prepare_restart(vq_current_count, z_flat)
+                    self.prepare_restart(vq_current_count, z_norm)
                     self.restart()
 
                 # if self.use_split:
@@ -634,8 +696,8 @@ class ProductQuantizerWrapper(nn.Module):
                  decay: float = 0.99,
                  eps: float = 1e-5,
                  use_restart: bool = False,
-                 use_gumbel: bool = False,
                  use_split: bool = False,
+                 use_gumbel: bool = False,
                  use_weighted_sum: bool = False,
                  update_norm: bool = True,
                  need_initialized: str = "none",
@@ -651,6 +713,7 @@ class ProductQuantizerWrapper(nn.Module):
 
         self.quantizers = nn.ModuleList([
             quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize, use_restart=use_restart,
+                          use_split=use_split,
                           use_weighted_sum=use_weighted_sum, need_initialized=need_initialized, pq_dropout=pq_dropout,
                           jsd_ts=jsd_ts)
             for _ in range(self.num_pq)
@@ -665,7 +728,8 @@ class ProductQuantizerWrapper(nn.Module):
         distance_prob = list()
 
         for i in range(self.num_pq):
-            q_i, output_i, prob_i = self.quantizers[i](z_split[i])  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
+            q_i, output_i, prob_i = self.quantizers[i](
+                z_split[i])  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
             z_quantized.append(q_i)
             if i == 0:
                 for k, v in output_i.items():

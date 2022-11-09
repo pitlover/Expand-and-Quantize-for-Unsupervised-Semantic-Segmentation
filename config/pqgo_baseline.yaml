@@ -2,9 +2,10 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_baseline_256_8*64_decX"
+  name: "PQGO_1024_32*8_decX_restart"
   notes: ""
-  tags: ${dataset_name}
+  tags_dataset: ${dataset_name}
+  tags_model: ${model.pretrained.model_type}
 # ---------------------------------------------------------------- #
 seed: 10
 num_classes: 27
@@ -14,7 +15,7 @@ is_visualize: false                           # default false, true
 visualize_path: "./visualize/stego+pq"
 # ---------------------------------------------------------------- #
 resume:
-  checkpoint: null                          # default null
+  checkpoint: null # "./"                          # default null
 
 # ---------------------------------------------------------------- #
 model:
@@ -31,17 +32,18 @@ model:
 
   vq:
     vq_type: "param"                          # "ema", "param"
-    num_codebooks: [ 256 ] # 512
-    embed_dims: [ 512 ]
+    num_codebooks: [ 1024 ] # 512
+    embed_dims: [ 256 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
-    use_restart: false                        # default false, true
+    use_restart: true                        # default false, true
+    use_split: false                        # default false, true
     use_weighted_sum: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
-    eps: 1.0e-
-    num_pq: [ 8 ]             # 64               # 1 for vq
+    eps: 1.0e-5
+    num_pq: [ 32 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -101,6 +103,7 @@ dataset:
   val:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
+    model_type : ${model.pretrained.model_type}
     crop_type: null
     loader_crop_type: "center"                # none for voc
     res: 320
@@ -110,7 +113,7 @@ dataloader:
     batch_size: 32  # total
     num_workers: 8  # total
   val:
-    batch_size: 32  # total
+    batch_size: 16  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #

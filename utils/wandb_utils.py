@@ -30,7 +30,7 @@ def set_wandb(cfg: Dict, force_mode: Optional[str] = None) -> Optional[str]:
         wandb_name = cfg["wandb"]["name"]
 
         wandb_note = cfg["wandb"]["notes"] if ("notes" in cfg["wandb"]) else None
-        wandb_tags = [cfg["wandb"]["tags"],] if ("tags" in cfg["wandb"]) else None
+        wandb_tags = [cfg["wandb"]["tags_dataset"], cfg["wandb"]["tags_model"]]
 
         wandb_id = cfg["wandb"]["id"] if ("id" in cfg["wandb"]) else None
         wandb_group = cfg["wandb"]["group"] if ("group" in cfg["wandb"]) else None

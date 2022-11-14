@@ -634,10 +634,6 @@ class Codebook(nn.Module):
         min_encoding_indices = torch.argmin(d, dim=1)
         distance_prob = F.softmax(-d / self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
         vq_indices = torch.argmin(d, dim=1)
-        # top1 = torch.max(distance_prob, dim=1)
-        # avg_top1 = torch.mean(top1.values)
-        # print(avg_top1)
-
         if self.use_weighted_sum:
             z_q = torch.matmul(distance_prob, codebook_norm)  # TODO check temperature scaling
         else:

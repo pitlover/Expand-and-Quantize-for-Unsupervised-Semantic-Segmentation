@@ -75,9 +75,9 @@ class PQGOWrapper(nn.Module):
         output["loss"] = model_loss
 
         if self.output_type == "feat":
-            out = code.detach()
+            out = code.clone().detach()
         elif "vq" == self.output_type[:2]:
-            out = feat_vqs.detach()  # (b, d, h, w)
+            out = feat_vqs.clone().detach()  # (b, d, h, w)
         else:
             raise ValueError(f"Unsupported output type {self.output_type}.")
 

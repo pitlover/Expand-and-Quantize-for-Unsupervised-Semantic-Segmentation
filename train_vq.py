@@ -93,7 +93,7 @@ def train_epoch(
             backward_time = time.time() - backward_start_time
 
             step_start_time = time.time()
-            scaler.unscale_(optimizers[0]) # TODO fp16
+            scaler.unscale_(optimizers[0])  # TODO fp16
             grad_norm = clip_grad_norm_(model_m.model.parameters(), max_norm=clip_grad)
 
             for optim, sched in zip(optimizers, schedulers):
@@ -113,8 +113,8 @@ def train_epoch(
                 # total_loss, output, _ = model(img, aug_img,
                 #                               label, it=it)  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
-                loss.backward() # TODO fp16
-                # scaler.scale(loss).backward()
+                # loss.backward() # TODO fp16
+                scaler.scale(loss).backward()
         else:  # non-update step
             # and not DDP
             # TODO fp16
@@ -234,7 +234,6 @@ def valid_epoch(
     count = 0
     saved_data = defaultdict(list)
 
-
     for it, data in enumerate(dataloader):
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
@@ -247,6 +246,7 @@ def valid_epoch(
         with torch.cuda.amp.autocast(enabled=True):
             _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, it=it, is_crf=is_crf)
         # _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, it=it, is_crf=is_crf)
+
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 
@@ -265,8 +265,8 @@ def valid_epoch(
             saved_data["label"].append(label.cpu().squeeze(0))
 
     barrier()
-    cluster_result = cluster_m.compute(current_iter, stage="cluster")  # {iou, accuracy}
-    linear_result = linear_m.compute(current_iter, stage="linear")  # {iou, accuracy}
+    cluster_result = cluster_m.compute()  # {iou, accuracy}
+    linear_result = linear_m.compute()  # {iou, accuracy}
 
     # if cfg["is_visualize"] and is_crf:
     if cfg["is_visualize"] and (current_iter % 2500 == 1):

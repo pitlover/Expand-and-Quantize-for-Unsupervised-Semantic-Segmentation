@@ -21,6 +21,8 @@ class UnSegEvaluator(nn.Module):
         self.linear_probe = nn.Conv2d(embed_dim, num_classes, kernel_size=1, stride=1)
         self.cluster_probe = ClusterLookup(embed_dim, num_classes + extra_classes)
 
+        self.linear_loss = nn.CrossEntropyLoss()
+
     def forward_linear(self, feat: torch.Tensor, label: torch.Tensor) -> torch.Tensor:  # TODO why not use?
         """
         :param feat:        (batch_size, 384, 28, 28)
@@ -48,7 +50,7 @@ class UnSegEvaluator(nn.Module):
                 ) -> Tuple[torch.Tensor, ...]:
 
         if out.shape[-2:] != img.shape[-2:]:
-            out = F.interpolate(out, img.shape[-2:], mode="bilinear", align_corners=True)  # maybe False?
+            out = F.interpolate(out, img.shape[-2:], mode="bilinear", align_corners=False)  # maybe False?
 
         if is_crf:
             linear_log_prob = torch.log_softmax(self.linear_probe(out), dim=1)
@@ -72,7 +74,8 @@ class UnSegEvaluator(nn.Module):
             mask = torch.logical_and(label_flat >= 0, label_flat < self.num_classes)
             label_flat = label_flat[mask]
             logit_flat = logit_flat[mask]
-            linear_loss = F.cross_entropy(logit_flat, label_flat, reduction="mean")
+            linear_loss = self.linear_loss(logit_flat, label_flat).mean()
+            # linear_loss = F.cross_entropy(logit_flat, label_flat, reduction="mean")
 
         return linear_loss, linear_preds, cluster_loss, cluster_preds
 

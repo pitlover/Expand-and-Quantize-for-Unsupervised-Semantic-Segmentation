@@ -59,12 +59,12 @@ class UnSegMetrics(nn.Module):
         self.confusion_matrix += confusion
 
     @torch.no_grad()
-    def compute(self, current_iter=0, stage: str = "cluster") -> Dict[str, torch.Tensor]:
+    def compute(self) -> Dict[str, torch.Tensor]:
         """Measure mIoU and accuracy."""
         self.confusion_matrix = all_reduce_tensor(self.confusion_matrix, op="sum")
 
         if self.compute_hungarian:  # cluster
-            self.assignments = linear_sum_assignment(self.confusion_matrix.cpu(), maximize=True)
+            self.assignments = linear_sum_assignment(self.confusion_matrix.detach().cpu(), maximize=True)
             # the output of 'linear_sum_assignment':
             # (row_indices,)  ex) [0, 3, 1, 2, 4]
             # (column_indices)  ex) [3, 4, 1, 0, 2]
@@ -73,7 +73,7 @@ class UnSegMetrics(nn.Module):
             if self.extra_classes == 0:
                 self.histogram = self.confusion_matrix[np.argsort(self.assignments[1]), :]
             else:
-                assignments_t = linear_sum_assignment(self.confusion_matrix.t(), maximize=True)
+                assignments_t = linear_sum_assignment(self.confusion_matrix.detach().cpu().t(), maximize=True)
                 histogram = self.confusion_matrix[assignments_t[1], :]
                 missing = list(set(range(self.num_classes + self.extra_classes)) - set(self.assignments[0]))
 

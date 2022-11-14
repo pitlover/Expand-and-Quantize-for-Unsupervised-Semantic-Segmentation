@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_70_vit-base"
+  name: "STEGO_70_vit-small"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -20,7 +20,7 @@ resume:
 # ---------------------------------------------------------------- #
 model:
   pretrained:
-    model_type: "vit_base"
+    model_type: "vit_small"
     dino_patch_size: 8
     freeze_backbone: true
     drop_prob: 0.1
@@ -33,20 +33,20 @@ model:
 loss:
   stego_weight: 1.0
   # cocostuff27 with vit-small
-  # neg_inter_weight: 0.63
-  # pos_inter_weight: 0.25
-  # pos_intra_weight: 0.67
-  # neg_inter_shift: 0.66
-  # pos_inter_shift: 0.02
-  # pos_intra_shift: 0.08
+  neg_inter_weight: 0.63
+  pos_inter_weight: 0.25
+  pos_intra_weight: 0.67
+  neg_inter_shift: 0.66
+  pos_inter_shift: 0.02
+  pos_intra_shift: 0.08
 
   # cocostuff27 with vit-base
-  neg_inter_weight: 0.1538476246415498
-  pos_inter_weight: 1
-  pos_intra_weight: 0.1
-  neg_inter_shift: 1
-  pos_inter_shift: 0.2
-  pos_intra_shift: 0.12
+#  neg_inter_weight: 0.1538476246415498
+#  pos_inter_weight: 1
+#  pos_intra_weight: 0.1
+#  neg_inter_shift: 1
+#  pos_inter_shift: 0.2
+#  pos_intra_shift: 0.12
 
   zero_clamp: true
   pointwise: true
@@ -59,6 +59,7 @@ dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
+    model_type : ${model.pretrained.model_type}
     crop_type: "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
@@ -67,6 +68,7 @@ dataset:
   val:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
+    model_type : ${model.pretrained.model_type}
     crop_type: null
     loader_crop_type: "center"  # none for voc
     res: 320
@@ -109,6 +111,6 @@ eval:
 train:
   max_epochs: 1
   print_interval_iters: 25
-  valid_interval_iters: 100
+  valid_interval_iters: 25
   clip_grad: 10.0
   num_accum: 1

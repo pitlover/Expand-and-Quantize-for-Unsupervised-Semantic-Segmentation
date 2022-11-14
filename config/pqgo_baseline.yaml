@@ -42,7 +42,7 @@ model:
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
-    eps: 1.0e-5
+    eps: 1.0e-6
     num_pq: [ 32 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8

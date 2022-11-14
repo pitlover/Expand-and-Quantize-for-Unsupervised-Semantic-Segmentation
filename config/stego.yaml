@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_70_vit-small"
+  name: "STEGO_70_new_reproduced"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -78,14 +78,14 @@ dataloader:
     batch_size: 32  # total
     num_workers: 8  # total
   val:
-    batch_size: 16  # total
+    batch_size: 32  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
 optimizer:
   model:
     name: "adam"
-    lr: 5e-4
+    lr: 5.0e-4
     weight_decay:
   cluster:
     name: "adam"
@@ -111,6 +111,6 @@ eval:
 train:
   max_epochs: 1
   print_interval_iters: 25
-  valid_interval_iters: 25
+  valid_interval_iters: 100
   clip_grad: 10.0
   num_accum: 1

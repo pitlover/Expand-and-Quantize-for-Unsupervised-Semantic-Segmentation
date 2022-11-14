@@ -1,7 +1,7 @@
 from typing import Dict, Tuple
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 from model.dino_unseg import DINOUnSeg
 from model.evaluator import UnSegEvaluator
 
@@ -75,11 +75,12 @@ class PQGOWrapper(nn.Module):
         output["loss"] = model_loss
 
         if self.output_type == "feat":
-            out = code.clone().detach()
+            out = torch.clone(code).detach()
         elif "vq" == self.output_type[:2]:
-            out = feat_vqs.clone().detach()  # (b, d, h, w)
+            out = torch.clone(feat_vqs).detach()  # (b, d, h, w)
         else:
             raise ValueError(f"Unsupported output type {self.output_type}.")
+
 
         linear_loss, linear_preds, cluster_loss, cluster_preds = self.evaluator(
             out, img, label=label, is_crf=is_crf)

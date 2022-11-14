@@ -49,8 +49,8 @@ class UnSegEvaluator(nn.Module):
                 is_crf: bool = False
                 ) -> Tuple[torch.Tensor, ...]:
 
-        if out.shape[-2:] != img.shape[-2:]:
-            out = F.interpolate(out, img.shape[-2:], mode="bilinear", align_corners=False)  # maybe False?
+        if not self.training:
+            out = F.interpolate(out, label.shape[-2:], mode="bilinear", align_corners=False)
 
         if is_crf:
             linear_log_prob = torch.log_softmax(self.linear_probe(out), dim=1)
@@ -68,14 +68,15 @@ class UnSegEvaluator(nn.Module):
             cluster_loss, cluster_preds = self.cluster_probe(out, None)
             cluster_preds = cluster_preds.argmax(1)
 
-            label_flat = label.view(-1)
+            label_flat = label.reshape(-1)
+            mask = torch.logical_and(label_flat >= 0, label_flat < self.num_classes)
+
+            linear_logits = F.interpolate(linear_logits, label.shape[-2:], mode="bilinear", align_corners=False)
             logit_flat = linear_logits.permute(0, 2, 3, 1).reshape(-1, self.num_classes)
 
-            mask = torch.logical_and(label_flat >= 0, label_flat < self.num_classes)
             label_flat = label_flat[mask]
             logit_flat = logit_flat[mask]
             linear_loss = self.linear_loss(logit_flat, label_flat).mean()
-            # linear_loss = F.cross_entropy(logit_flat, label_flat, reduction="mean")
 
         return linear_loss, linear_preds, cluster_loss, cluster_preds
 

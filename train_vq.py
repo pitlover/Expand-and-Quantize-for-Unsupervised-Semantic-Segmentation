@@ -71,6 +71,7 @@ def train_epoch(
         label = data["label"].to(device, non_blocking=True)
         data_time = time.time() - data_start_time
         img_pos = data["img_pos"].to(device, non_blocking=True)
+
         # -------------------------------- loss -------------------------------- #
         if it % num_accum == 0:
             for optim in optimizers:

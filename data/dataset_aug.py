@@ -40,14 +40,14 @@ def get_transform(res: int, is_label: bool, crop_type: str, is_aug: bool = False
             T.RandomGrayscale(0.2),
             T.RandomApply([T.GaussianBlur(3, 3)]),
             T.ToTensor(),  # (h, w, 3) [0 255] -> (3, h, w) [0, 1]
-            # T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
     else:
         return T.Compose([
             T.Resize(res, InterpolationMode.NEAREST),
             cropper,
             T.ToTensor(),  # (h, w, 3) [0 255] -> (3, h, w) [0, 1]
-            # T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
 

@@ -37,6 +37,8 @@ def build_model(cfg: dict,
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
     elif "pqgo" in name:
         model = PQGOWrapper(cfg, DIONPQGO(cfg["model"], cfg["loss"]))
+    elif "stego" in name:
+        model = StegoWrapper(cfg, DINOStego(cfg))
     elif "spq" in name:
         model = DINONewVQWrapper(cfg, DINOSPQ(cfg["model"], cfg["loss"]))
     elif "new" in name:
@@ -49,8 +51,7 @@ def build_model(cfg: dict,
         model = DINOUnSegWrapper(cfg, DINOContra(cfg["model"]))
     elif "vae" in name:
         model = DINOUnSegWrapper(cfg, DINOVae(cfg["model"]))
-    elif "stego" in name:
-        model = StegoWrapper(cfg, DINOStego(cfg))
+
     else:
         raise ValueError(f"Unsupported type {name}.")
 

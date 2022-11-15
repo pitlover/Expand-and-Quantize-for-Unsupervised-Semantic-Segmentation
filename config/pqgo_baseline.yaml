@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_1024_32*16_decX_"
+  name: "PQGO_1024_32*16_decX_bs32"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -26,8 +26,6 @@ model:
     dropout: true
     drop_prob: 0.1
     pretrained_weights: null
-  enc_num_blocks: 1
-  dec_num_blocks: 3
   last_norm: false
 
   vq:
@@ -110,10 +108,10 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 32  # total
+    batch_size: 1  # total
     num_workers: 8  # total
   val:
-    batch_size: 8  # total
+    batch_size: 16  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #

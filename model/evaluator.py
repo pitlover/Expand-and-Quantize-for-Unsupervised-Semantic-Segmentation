@@ -48,7 +48,8 @@ class UnSegEvaluator(nn.Module):
                 label: Optional[torch.Tensor] = None,
                 is_crf: bool = False
                 ) -> Tuple[torch.Tensor, ...]:
-        if not self.training:
+
+        if out.shape[-2:] != label.shape[-2:]:
             out = F.interpolate(out, label.shape[-2:], mode="bilinear", align_corners=False)
 
         if is_crf:

@@ -13,7 +13,7 @@ from model.blocks.resnet import EncResBlock, DecResBlock
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
-from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss, STEGOLoss
+from model.loss import InfoNCELoss, JSDLoss, JSDPosLoss, MarginRankingLoss, EntropyLoss, STEGOLoss
 
 
 class DIONPQGO(nn.Module):
@@ -31,13 +31,6 @@ class DIONPQGO(nn.Module):
         # # -------- head -------- #
         self.cluster1 = self.make_clusterer(self.feat_dim)
         self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
-
-        # -------- semantic-encoder -------- #
-        # num_enc_blocks = cfg["enc_num_blocks"]
-        # semantic_enc_proj = []
-        # for i in range(num_enc_blocks):
-        #     semantic_enc_proj.append(EncResBlock(self.feat_dim if (i == 0) else self.hidden_dim, self.hidden_dim))
-        # self.enc_proj = nn.Sequential(*semantic_enc_proj)
 
         # # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
@@ -131,16 +124,10 @@ class DIONPQGO(nn.Module):
             dino_feat_pos = self.dropout(dino_feat_pos)
             code_pos = self.cluster1(dino_feat_pos)
             code_pos += self.cluster2(dino_feat_pos)
+        else:
+            code_pos = None  # placeholder
 
-        # dino_feat = self.extractor(img)  # (2b, 384, 28, 28)
-        # dino_feat = self.dropout(dino_feat)
-        # code = self.enc_proj(dino_feat)  # (2b, hidden_dim, 28, 28)
-        #
-        # if self.training:
-        #     dino_feat_pos = self.extractor(img_pos)
-        #     dino_feat_pos = self.dropout(dino_feat_pos)
-        #     code_pos = self.enc_proj(dino_feat_pos)
-        quantized_feat, outputs, distance_prob = self.vq_blocks[0](code, it=it)  # (2b, hidden_dim, h, w)
+        quantized_feat, outputs, distance_prob = self.vq_blocks[0](code, code_pos, it=it)  # (2b, hidden_dim, h, w)
 
         # TODO vq part
         if self.training:
@@ -447,14 +434,7 @@ class EMACodebook(nn.Module):
         # TODO jsd-loss check
         output["jsd"] = self.jsd_loss(top_dis_prob_1, top_dis_prob_2)
         output["entropy"] = self.entropy_loss(top_dis_prob_1, top_dis_prob_2)
-        # with torch.no_grad():
-        #     os.makedirs('./pq0_correlation_matrix/pq_mask_jsd0.1/512/', exist_ok=True)
-        #     if i == 0 and it % 2000 == 1:
-        #         # codebook_norm : (n_codebook, dim)
-        #         corr_matrix_i = torch.matmul(codebook_norm, codebook_norm.T)
-        #         torch.save(corr_matrix_i, f'./pq0_correlation_matrix/pq_mask_jsd0.1/512/{self.pq_dropout}_{it}.pt')
-        #         del corr_matrix_i
-        #         torch.cuda.empty_cache()
+
         return z_q, output, distance_prob
 
 
@@ -500,9 +480,8 @@ class Codebook(nn.Module):
         self.use_split = use_split
         self.need_initialized = need_initialized
         # ----- JSD ------ #
-        self.jsd_loss = JSDLoss()
+        self.posjsd_loss = JSDPosLoss()
         self.jsd_ts = jsd_ts
-        self.entropy_loss = EntropyLoss()
 
     @torch.no_grad()
     def prepare_restart(self, vq_current_count: torch.Tensor, z_flat: torch.Tensor) -> None:
@@ -568,13 +547,16 @@ class Codebook(nn.Module):
 
         self.vq_count.fill_(0)
         return n_update
-    def forward(self, z: torch.Tensor):  # i-th pq, iteration
+
+    def forward(self, z: torch.Tensor, z_pos : torch.Tensor):  # i-th pq, iteration
         output = dict()
         self.vq_count = self.vq_count.to(z.device)
-        # TODO kmeans_sampling
-        # z_flat = z
+        b, d, h, w = z.shape
         z = z.permute(0, 2, 3, 1).contiguous()  # (b, d, h, w) -> (b, h, w, d)
         z_flat = z.view(-1, self.latent_dim)  # (bhw, d)
+
+        z_pos = z_pos.permute(0, 2, 3, 1).contiguous()
+        z_pos_flat = z_pos.view(-1, self.latent_dim)
 
         if self.need_initialized != "none" and self.training:
             if self.need_initialized == "rand":
@@ -602,10 +584,15 @@ class Codebook(nn.Module):
 
         if self.normalize == "l2":
             z_norm = F.normalize(z_flat, dim=1)
+            z_pos_norm = F.normalize(z_pos_flat, dim=1)
             codebook_norm = F.normalize(codebook, dim=1)
+
         elif self.normalize == "z_norm":  # z-normalize
             z_flat_std, z_flat_mean = torch.std_mean(z_flat, dim=1, keepdim=True)  # (n, 1)
             z_norm = (z_flat - z_flat_mean) / (z_flat_std + 1e-5)
+
+            z_pos_flat_std, z_pos_flat_mean = torch.std_mean(z_pos_flat, dim=1, keepdim=True)
+            z_pos_norm = (z_pos_flat - z_pos_flat_mean) / (z_pos_flat_std + 1e-5)
 
             codebook_std, codebook_mean = torch.std_mean(codebook, dim=1, keepdim=True)  # (K, 1)
             codebook_norm = (codebook - codebook_mean) / (codebook_std + 1e-5)
@@ -619,6 +606,7 @@ class Codebook(nn.Module):
             codebook_norm = (codebook - codebook_mean) / (codebook_std + 1e-5)
         elif self.normalize == "none":
             z_norm = z_flat
+            z_pos_norm = z_pos_flat
             codebook_norm = codebook
         else:
             raise ValueError(f"Unsupported normalize type {self.normalize}")
@@ -631,8 +619,13 @@ class Codebook(nn.Module):
             torch.sum(codebook_norm ** 2, dim=1) - \
             2 * (torch.matmul(z_norm, codebook_norm.t()))  # (2bhw, n_prototypes)
 
+        pos_d = torch.sum(z_pos_norm ** 2, dim=1, keepdim=True) + \
+            torch.sum(codebook_norm ** 2, dim=1) - \
+            2 * (torch.matmul(z_pos_norm, codebook_norm.t()))  # (2bhw, n_prototypes)
+
         min_encoding_indices = torch.argmin(d, dim=1)
         distance_prob = F.softmax(-d / self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
+        pos_distance_prob = F.softmax(-pos_d / self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
         vq_indices = torch.argmin(d, dim=1)
         if self.use_weighted_sum:
             z_q = torch.matmul(distance_prob, codebook_norm)  # TODO check temperature scaling
@@ -648,11 +641,6 @@ class Codebook(nn.Module):
                 vq_current_count = all_reduce_tensor(vq_current_count, op="sum")
 
                 self.vq_count += vq_current_count
-
-                # vq_current_hist = get_histogram_count(vq_current_count, prefix="current")
-                # vq_hist = get_histogram_count(self.vq_count, prefix="total")
-                # output.update(vq_hist)
-                # output.update(vq_current_hist)
 
                 if self.use_restart:
                     self.prepare_restart(vq_current_count, z_norm)
@@ -675,8 +663,13 @@ class Codebook(nn.Module):
 
         # TODO kmeans sampling
         z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
+        z_norm = z_norm.view(z.shape).permute(0, 3, 1, 2).contiguous()
+        z_pos_norm = z_pos_norm.view(z.shape).permute(0, 3, 1, 2).contiguous()
 
+        distance_prob = distance_prob.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
+        pos_distance_prob = pos_distance_prob.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
         output["vq-loss"] = q_loss
+        output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
 
         return z_q, output, distance_prob
 
@@ -715,17 +708,21 @@ class ProductQuantizerWrapper(nn.Module):
             for _ in range(self.num_pq)
         ])
 
-    def forward(self, z: torch.Tensor, it: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
+    def forward(self, z: torch.Tensor, z_pos: torch.Tensor = None, it: int = -1) -> Tuple[
+        torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
         # b, c, h, w = z.shape
         z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
-
+        if self.training:
+            z_pos_split = torch.chunk(z_pos, chunks=self.num_pq, dim=1)
+        else:
+            z_pos_spilt = None
         z_quantized = list()
         outputs = dict()
         distance_prob = list()
 
         for i in range(self.num_pq):
             q_i, output_i, prob_i = self.quantizers[i](
-                z_split[i])  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
+                z_split[i], z_pos_split[i])  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
             z_quantized.append(q_i)
             if i == 0:
                 for k, v in output_i.items():

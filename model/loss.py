@@ -463,10 +463,65 @@ class JSDLoss(nn.Module):
         # TODO check position
         return 0.5 * (self.kl(m, p.add(1e-6).log()) + self.kl(m, q.add(1e-6).log()))
 
-    # def forward(self, p: torch.Tensor, q: torch.Tensor):
-    #     loss = self.kl(q.log, p.log)
-    #
-    #     return loss
+
+class JSDPosLoss(nn.Module):
+    def __init__(self, reduction: str = "batchmean"):
+        super().__init__()
+        self.kl = nn.KLDivLoss(reduction=reduction, log_target=True)
+
+    def jsd(self, p: torch.Tensor, q: torch.Tensor):
+        if torch.min(p) < 0.0 or torch.max(p) > 1.0 or torch.min(q) < 0 or torch.max(q) > 1.0:
+            raise ValueError(
+                f"min_p, max_p, min_q, max_q : {torch.min(p)}, {torch.max(p)}, {torch.min(q)}, {torch.max(q)}")
+
+        m = (0.5 * (p + q).add(1e-6)).log()
+        # TODO check position
+        return 0.5 * (self.kl(m, p.add(1e-6).log()) + self.kl(m, q.add(1e-6).log()))
+
+    def forward(self, z: torch.Tensor, z_pos: torch.Tensor, z_dis: torch.Tensor, z_pos_dis: torch.Tensor):
+        '''
+
+        :param z: (b, pq_dim, h, w)
+        :param z_pos: (b, pq_dim, h, w)
+        :param z_dis: (b, num_pq, h, w)
+        :param z_pos_dis:  (b, num_pq, h, w)
+        :return:
+        '''
+        # img <-> pos_img
+        # coord_shape = [z.shape[0], 11, 11, 2]  # (b, 11, 11, 2)
+        # coord = torch.rand(coord_shape, device=z.device) * 2 - 1
+        # sample_z = sample(z, coord)  # (b, pq_dim, 11, 11) # TODO better way to select query points
+        # sample_z_prob = sample(z_dis, coord) # (b, num_pq, 11, 11)
+        #
+        # attn = torch.einsum("nchw,ncij->nhwij", sample_z, z_pos)
+        # attn -= attn.mean([3, 4], keepdim=True)
+        # attn = attn.clamp(0)  # (b, 11, 11, h, w)
+        # sample_z = torch.index_select
+        # z_dis = z_dis.view()
+        b, d, h, w = z.shape
+        num_pq = z_dis.shape[1]
+
+        z = z.permute(0, 2, 3, 1).reshape(b, -1, d) # (b, hw, d)
+        z_pos = z_pos.permute(0, 2, 3, 1).reshape(b, -1, d) # (b, hw, d)
+        z_dis = z_dis.permute(0, 2, 3, 1).reshape(b, -1, num_pq)  # (b, hw, d)
+        z_pos_dis = z_pos_dis.permute(0, 2, 3, 1).reshape(b, -1, num_pq)  # (b, hw, d)
+
+        for i in range(b):
+            rand_11 = torch.randint(0, h*w, (11,), device=z.device)
+            sample_z = F.embedding(rand_11, z[i])
+            sample_z_prob = F.embedding(rand_11, z_dis[i]) # (11, num_pq)
+            
+            attn = torch.matmul(sample_z, z_pos[i].t()) ## (11, hw)
+            attn -= attn.mean(dim=-1, keepdim=True)
+            attn = attn.clamp(0)  # (11, hw)
+
+            indices = torch.nonzero(attn)
+            sample_z_pos_prob = F.embedding(indices, z_pos_dis[i])
+            print(indices, len(indices))
+            print(sample_z_pos_prob.shape)
+            exit()
+        print(attn, attn.shape)
+        exit()
 
 
 def tensor_correlation(a, b):

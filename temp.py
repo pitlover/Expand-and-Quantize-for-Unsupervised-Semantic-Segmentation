@@ -1,92 +1,72 @@
-['../Datasets/cocostuff/images/val2017/000000000139.jpg',
- '../Datasets/cocostuff/images/val2017/000000000885.jpg',
- '../Datasets/cocostuff/images/val2017/000000002153.jpg',
- '../Datasets/cocostuff/images/val2017/000000002923.jpg',
- '../Datasets/cocostuff/images/val2017/000000005529.jpg',
- '../Datasets/cocostuff/images/val2017/000000006818.jpg',
- '../Datasets/cocostuff/images/val2017/000000007511.jpg',
- '../Datasets/cocostuff/images/val2017/000000007888.jpg']
-
-['../Datasets/cocostuff/images/val2017/000000000785.jpg',
- '../Datasets/cocostuff/images/val2017/000000001532.jpg',
- '../Datasets/cocostuff/images/val2017/000000002473.jpg',
- '../Datasets/cocostuff/images/val2017/000000003553.jpg',
- '../Datasets/cocostuff/images/val2017/000000006460.jpg',
- '../Datasets/cocostuff/images/val2017/000000007278.jpg',
- '../Datasets/cocostuff/images/val2017/000000007784.jpg',
- '../Datasets/cocostuff/images/val2017/000000008211.jpg']
-
-['../Datasets/cocostuff/images/val2017/000000000872.jpg',
- '../Datasets/cocostuff/images/val2017/000000001761.jpg',
- '../Datasets/cocostuff/images/val2017/000000002532.jpg',
- '../Datasets/cocostuff/images/val2017/000000005060.jpg',
- '../Datasets/cocostuff/images/val2017/000000006723.jpg',
- '../Datasets/cocostuff/images/val2017/000000007281.jpg',
- '../Datasets/cocostuff/images/val2017/000000007816.jpg',
- '../Datasets/cocostuff/images/val2017/000000008762.jpg']
-
-['../Datasets/cocostuff/images/val2017/000000000724.jpg',
- '../Datasets/cocostuff/images/val2017/000000001268.jpg',
- '../Datasets/cocostuff/images/val2017/000000002261.jpg',
- '../Datasets/cocostuff/images/val2017/000000003255.jpg',
- '../Datasets/cocostuff/images/val2017/000000006213.jpg',
- '../Datasets/cocostuff/images/val2017/000000007088.jpg',
- '../Datasets/cocostuff/images/val2017/000000007574.jpg',
- '../Datasets/cocostuff/images/val2017/000000007977.jpg']
-
-Current iter: 0 (epoch 0, epoch done: 0.00 %)
-... stego-loss: -0.013451
-... loss: -0.013451
-... linear-loss: 3.497477
-... cluster-loss: -0.235188
-... LR: 0.000500
-... grad/param norm: 0.247 / 13.226
-... batch_size x num_accum x gpus = 8 x 1 x 4 = 32
-... data/fwd/bwd/step time: 1.073 / 4.820 / 0.294 / 0.048
+import torch
+import torch.nn.functional as F
 
 
-Current iter: 0 (epoch 0, epoch done: 0.00 %)
-... stego-loss: -0.009460
-... loss: -0.009460
-... linear-loss: 3.516013
-... cluster-loss: -0.234572
-... LR: 0.000500
-... grad/param norm: 0.255 / 13.226
-... batch_size x num_accum x gpus = 32 x 1 x 1 = 32
-... data/fwd/bwd/step time: 2.844 / 4.701 / 0.304 / 0.005
+def jsd(p: torch.Tensor, q: torch.Tensor):
+    '''
+
+    :param p: (b, selected, dim)
+    :param q: (b, hw, dim)
+    :return:
+    '''
+    # broadcasting ...
+    p = p[:, None, ...] # (b, 1, selected, dim)
+    q = q[:, :, None, :] # (b, hw, 1, dim)
+
+    m = torch.clamp((p + q) * 0.5, 1e-7, 1).log() # (b, hw, selected, dim)
+    loss = (F.kl_div(m, p, reduction="batchmean") + F.kl_div(m, q, reduction="batchmean")) * 0.5
+
+    return loss
 
 
-###
-['../Datasets/cocostuff/images/val2017/000000000139.jpg', 
- '../Datasets/cocostuff/images/val2017/000000000724.jpg',
- '../Datasets/cocostuff/images/val2017/000000000785.jpg',
- '../Datasets/cocostuff/images/val2017/000000000872.jpg',
- '../Datasets/cocostuff/images/val2017/000000000885.jpg',
- '../Datasets/cocostuff/images/val2017/000000001268.jpg',
- '../Datasets/cocostuff/images/val2017/000000001532.jpg',
- '../Datasets/cocostuff/images/val2017/000000001761.jpg',
- '../Datasets/cocostuff/images/val2017/000000002153.jpg',
- '../Datasets/cocostuff/images/val2017/000000002261.jpg',
- '../Datasets/cocostuff/images/val2017/000000002473.jpg',
- '../Datasets/cocostuff/images/val2017/000000002532.jpg',
- '../Datasets/cocostuff/images/val2017/000000002923.jpg',
- '../Datasets/cocostuff/images/val2017/000000003255.jpg',
- '../Datasets/cocostuff/images/val2017/000000003553.jpg',
- '../Datasets/cocostuff/images/val2017/000000005060.jpg',
- '../Datasets/cocostuff/images/val2017/000000005529.jpg',
- '../Datasets/cocostuff/images/val2017/000000006213.jpg',
- '../Datasets/cocostuff/images/val2017/000000006460.jpg',
- '../Datasets/cocostuff/images/val2017/000000006723.jpg',
- '../Datasets/cocostuff/images/val2017/000000006818.jpg',
- '../Datasets/cocostuff/images/val2017/000000007088.jpg',
- '../Datasets/cocostuff/images/val2017/000000007278.jpg',
- '../Datasets/cocostuff/images/val2017/000000007281.jpg',
- '../Datasets/cocostuff/images/val2017/000000007511.jpg',
- '../Datasets/cocostuff/images/val2017/000000007574.jpg',
- '../Datasets/cocostuff/images/val2017/000000007784.jpg',
- '../Datasets/cocostuff/images/val2017/000000007816.jpg',
- '../Datasets/cocostuff/images/val2017/000000007888.jpg',
- '../Datasets/cocostuff/images/val2017/000000007977.jpg',
- '../Datasets/cocostuff/images/val2017/000000008211.jpg',
- '../Datasets/cocostuff/images/val2017/000000008762.jpg']
+# def jsd(p: torch.Tensor, q: torch.Tensor):
+#     kldiv = torch.nn.KLDivLoss()
+#
+#     if torch.min(p) < 0.0 or torch.max(p) > 1.0 or torch.min(q) < 0 or torch.max(q) > 1.0:
+#         raise ValueError(
+#             f"min_p, max_p, min_q, max_q : {torch.min(p)}, {torch.max(p)}, {torch.min(q)}, {torch.max(q)}")
+#
+#     return (p[None, ...] * (torch.log(p[None, ...] - q[:, None, :])).mean(dim=-1))
+# m = (0.5 * (p + q).add(1e-6)).log()
+# return 0.5 * (kldiv(m, p.add(1e-6).log()) + kldiv(m, q.add(1e-6).log()))
 
+
+# random_index = torch.tensor([i for i in range(2 * 3)]).reshape(2, 3)  # (2, 3)
+random_index = torch.tensor([[5, 1, 0],
+                             [2, 6, 3]])
+print(random_index)
+feature = torch.Tensor([i for i in range(2 * 9 * 5)]).reshape(2, -1, 5)  # (2, 9, 5)
+flat_feature = feature.reshape(-1, 5)  # (2, 9, 5)
+pos_feature = torch.Tensor([i for i in range(2 * 9 * 5, 2 * 2 * 9 * 5)]).reshape(2, 9, 5)  # (2, 9, 5)
+dis_prob = torch.rand(2 * 9, 10)
+pos_dis_prob = torch.rand(2 * 9, 10)
+# dis_prob = torch.Tensor([i for i in range(2 * 9 * 10)]).reshape(-1, 10)  # (2, 9, 10) -> (18, 10)
+# pos_dis_prob = torch.Tensor([i for i in range(2 * 9 * 10, 2 * 2 * 9 * 10)]).reshape(-1, 10)  # (2, 9, 10) -> (18, 10)
+
+for a in range(random_index.shape[0]):
+    random_index[a] += (a * 9)
+
+# feature = torch.tensor([i for i in range(2 * 9 * 5)]).reshape(2, 9, 5)  # (2, 9, 5)
+
+print(feature, "feautre", feature.shape)
+print(dis_prob, "dis_prob", dis_prob.shape)
+print(pos_dis_prob, "pos_dis", pos_dis_prob.shape)
+
+sample_feature = F.embedding(random_index, flat_feature)  # (2, 3, 5)
+sample_feature_dis = F.embedding(random_index, dis_prob)  # (2, 3, 10)
+print(sample_feature.shape, sample_feature_dis.shape)
+
+attn = torch.einsum("bsc,bdc->bsd", sample_feature, pos_feature)  # pos_feature : (2, 3, 9)
+print(attn, attn.shape)
+attn -= attn.mean([-1], keepdim=True)
+print(attn)
+attn = attn.clamp(0)  # (b, 11, 11, h, w)
+mask = attn > 0
+print(mask, mask.shape)
+
+loss = jsd(sample_feature_dis, pos_dis_prob.reshape(2, -1, 10))  # (6, 10) * (18, 10)
+print(loss, loss.shape)
+# result = torch.tensor([
+#     [[25, 26, 27, 28, 29], [5, 6, 7, 8, 9], [0, 1, 2, 3, 4]],
+#     [[55, 56, 57, 58, 59], [75, 76, 77, 78, 79], [60, 61, 62, 63, 64]]
+# ])

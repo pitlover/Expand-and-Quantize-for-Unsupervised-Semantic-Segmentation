@@ -711,11 +711,10 @@ class ProductQuantizerWrapper(nn.Module):
     def forward(self, z: torch.Tensor, z_pos: torch.Tensor = None, it: int = -1) -> Tuple[
         torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
         # b, c, h, w = z.shape
+        if not self.training:
+            z_pos = torch.zeros_like(z)
         z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
-        if self.training:
-            z_pos_split = torch.chunk(z_pos, chunks=self.num_pq, dim=1)
-        else:
-            z_pos_spilt = None
+        z_pos_split = torch.chunk(z_pos, chunks=self.num_pq, dim=1)
         z_quantized = list()
         outputs = dict()
         distance_prob = list()

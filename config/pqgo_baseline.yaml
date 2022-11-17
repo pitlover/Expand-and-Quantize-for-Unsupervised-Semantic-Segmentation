@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_128_64*16_decX_bs16"
+  name: "PQGO_10214_32*16_decX_bs16"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -30,8 +30,8 @@ model:
 
   vq:
     vq_type: "param"                          # "ema", "param"
-    num_codebooks: [ 128 ] # 512
-    embed_dims: [ 1024 ]
+    num_codebooks: [ 1024 ] # 512
+    embed_dims: [ 512 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
@@ -41,7 +41,7 @@ model:
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-6
-    num_pq: [ 64 ]             # 64               # 1 for vq
+    num_pq: [ 32 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -52,7 +52,7 @@ loss:
   recon_weight: 0.0
   vq_weight: 1.0
   info_nce_weight: 0.0
-  jsd_weight: 0.0
+  jsd_weight: 1.0
   margin_weight: 0.0
 
   info_nce:
@@ -61,8 +61,8 @@ loss:
     temperature: 1.0                          # TODO need check
     cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
   jsd:
-    temperature: 0.1
-    entropy_weight: 0.01
+    num_query : 11
+    temperature : 1.0 # TODO need check
   stego:
     # cocostuff27 with vit-small
     neg_inter_weight: 0.63
@@ -108,7 +108,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 1  # total
+    batch_size: 4  # total
     num_workers: 8  # total
   val:
     batch_size: 8  # total

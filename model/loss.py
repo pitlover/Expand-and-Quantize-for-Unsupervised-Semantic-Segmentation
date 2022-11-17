@@ -465,35 +465,36 @@ class JSDLoss(nn.Module):
 
 
 class JSDPosLoss(nn.Module):
-    def __init__(self, reduction: str = "batchmean"):
+    def __init__(self,
+                 reduction: str = "batchmean",
+                 num_query: int = 3):
         super().__init__()
         self.kl = nn.KLDivLoss(reduction=reduction)
+        self.num_query = num_query
 
-    def jsd(self, p: torch.Tensor, q: torch.Tensor, mask : torch.Tensor):
+    def jsd(self, p: torch.Tensor, q: torch.Tensor):
         '''
 
         :param p: (b, selected, dim)
         :param q: (b, hw, dim)
-        :param mask: (b, selected, hw)
         :return:
         '''
         # broadcasting ...
-        p = p[:, None, ...]  # (b, 1, selected, dim)
-        q = q[:, :, None, :]  # (b, hw, 1, dim)
+        # p = p[:, None, ...]  # (b, 1, selected, dim)
+        # q = q[:, :, None, :]  # (b, hw, 1, dim)
 
-        m = torch.clamp((p + q) * 0.5, 1e-7, 1).log()   # (b, hw, selected, dim)
-
-        loss = (self.kl(m, p) + self.kl(m, q)) * 0.5    # (b, hw, selected, dim)
+        m = torch.clamp((p + q) * 0.5, 1e-7, 1).log()  # (b, hw, selected, dim)
+        loss = (self.kl(m, p) + self.kl(m, q)) * 0.5  # (b, hw, selected, dim)
 
         return loss
 
     def forward(self, z: torch.Tensor, z_pos: torch.Tensor, z_dis: torch.Tensor, z_pos_dis: torch.Tensor):
         '''
 
-        :param z: (b, pq_dim, h, w)
-        :param z_pos: (b, pq_dim, h, w)
-        :param z_dis: (b, num_pq, h, w)
-        :param z_pos_dis:  (b, num_pq, h, w)
+        :param z: (b, h, w, pq_dim)
+        :param z_pos: (b, h, w, pq_dim)
+        :param z_dis: (b, h, w, num_pq)
+        :param z_pos_dis:  (b, h, w, num_pq)
         :return:
         '''
         # img <-> pos_img
@@ -536,17 +537,17 @@ class JSDPosLoss(nn.Module):
         #
         # return loss
 
-        b, d, h, w = z.shape
-        num_pq = z_dis.shape[1]
+        b, h, w, d = z.shape
+        num_pq = z_dis.shape[-1]
 
-        z = z.permute(0, 2, 3, 1).reshape(b, -1, d)  # (b, hw, d)
-        z_pos = z_pos.permute(0, 2, 3, 1).reshape(b, -1, d)  # (b, hw, d)
-        z_dis = z_dis.permute(0, 2, 3, 1).reshape(b, -1, num_pq)  # (b, hw, num_pq)
-        z_pos_dis = z_pos_dis.permute(0, 2, 3, 1).reshape(b, -1, num_pq)  # (b, hw, num_pq)
+        z = z.reshape(b, -1, d)  # (b, hw, d)
+        z_pos = z_pos.reshape(b, -1, d)  # (b, hw, d)
+        z_dis = z_dis.reshape(b, -1, num_pq)  # (b, hw, num_pq)
+        z_pos_dis = z_pos_dis.reshape(b, -1, num_pq)  # (b, hw, num_pq)
 
         # select random 11 patches per image
-        rand_11 = torch.randint(0, h * w, (b, 3,), device=z.device)  # (b, 11)
-        # rand_11 = torch.randint(0, h * w, (b, 11,), device=z.device)  # (b, 11) # TODO covner to 3. just for debugging
+
+        rand_11 = torch.randint(0, h * w, (b, self.num_query,), device=z.device)  # (b, 11)
         for a in range(b):
             rand_11[a] += (a * h * w)
         flat_z = z.reshape(-1, d)
@@ -558,13 +559,12 @@ class JSDPosLoss(nn.Module):
         attn = torch.einsum("bsc,bdc->bsd", sample_z, z_pos)
         attn -= attn.mean(dim=-1, keepdim=True)
         attn = attn.clamp(0)
-        mask = attn > 0  # (b, 11, hw)
-        print(sample_z_dis[mask])
-        exit()
-        print(sample_z_dis*mask, (sample_z_dis*mask).shape)
+        mask = (attn > 0)  # (b, 11, hw)
+
+        sample_z_dis = sample_z_dis.unsqueeze(-2).repeat(1, 1, h * w, 1)
+        z_pos_dis = z_pos_dis.unsqueeze(1).repeat(1, self.num_query, 1, 1)
+
         loss = self.jsd(sample_z_dis[mask], z_pos_dis[mask])
-        print(loss)
-        exit()
 
         return loss
 

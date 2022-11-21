@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_256_64*16_decX_bs8_jsd0.1"
+  name: "PQGO_256_64*16_decX_jsd0.1_16"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -62,6 +62,7 @@ loss:
     cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
   jsd:
     num_query : 11
+    num_pos : 30
     temperature : 1.0 # TODO need check
   stego:
     # cocostuff27 with vit-small

@@ -48,6 +48,7 @@ class DIONPQGO(nn.Module):
         self.pq_dropout = cfg["vq"].get("pq_dropout", 0.0)
         self.jsd_ts = cfg_loss["jsd"].get("temperature", 1.0)
         self.num_query = cfg_loss["jsd"].get("num_query", 3)
+        self.num_pos = cfg_loss["jsd"].get("num_pos", 10)
         self.n_kmeans = cfg["vq"].get("n_kmeans", 1)
         vq_kwargs = dict(beta=self.beta,
                          normalize=self.normalize,
@@ -57,7 +58,8 @@ class DIONPQGO(nn.Module):
                          need_initialized=self.need_initialized,
                          pq_dropout=self.pq_dropout,
                          jsd_ts=self.jsd_ts,
-                         num_query=self.num_query)
+                         num_query=self.num_query,
+                         num_pos=self.num_pos)
 
         self.num_pq = cfg["vq"].get("num_pq", 1)
 
@@ -206,7 +208,8 @@ class EMACodebook(nn.Module):
                  need_initialized: str = "kmeans",
                  pq_dropout: float = 0.0,
                  jsd_ts: float = 1.0,
-                 num_query: int = 3):
+                 num_query: int = 3,
+                 num_pos: int = 10):
         super(EMACodebook, self).__init__()
         """
         embedding: (num_vq, embed_dim)
@@ -453,7 +456,8 @@ class Codebook(nn.Module):
                  need_initialized: str = "kmeans",
                  pq_dropout: float = 0.0,
                  jsd_ts: float = 1.0,
-                 num_query: int = 3
+                 num_query: int = 3,
+                 num_pos : int = 10
                  ):
         super(Codebook, self).__init__()
         """
@@ -485,7 +489,7 @@ class Codebook(nn.Module):
         self.use_split = use_split
         self.need_initialized = need_initialized
         # ----- JSD ------ #
-        self.posjsd_loss = JSDPosLoss(num_query=num_query)
+        self.posjsd_loss = JSDPosLoss(num_query=num_query, num_pos=num_pos)
         self.jsd_ts = jsd_ts
 
     @torch.no_grad()
@@ -676,7 +680,7 @@ class Codebook(nn.Module):
         pos_distance_prob = pos_distance_prob.view(b, h, w, -1).contiguous()
         output["vq-loss"] = q_loss
         if self.training:
-           output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
+            output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
 
         return z_q, output, distance_prob
 
@@ -699,7 +703,8 @@ class ProductQuantizerWrapper(nn.Module):
                  need_initialized: str = "none",
                  pq_dropout: float = 0.0,
                  jsd_ts: float = 1.0,
-                 num_query : int = 3,
+                 num_query: int = 3,
+                 num_pos: int = 10,
                  quantizer_cls=Codebook,
                  ) -> None:
         super().__init__()
@@ -712,7 +717,7 @@ class ProductQuantizerWrapper(nn.Module):
             quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize, use_restart=use_restart,
                           use_split=use_split,
                           use_weighted_sum=use_weighted_sum, need_initialized=need_initialized, pq_dropout=pq_dropout,
-                          jsd_ts=jsd_ts, num_query=num_query)
+                          jsd_ts=jsd_ts, num_query=num_query, num_pos=num_pos)
             for _ in range(self.num_pq)
         ])
 

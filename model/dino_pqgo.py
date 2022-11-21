@@ -676,7 +676,7 @@ class Codebook(nn.Module):
         pos_distance_prob = pos_distance_prob.view(b, h, w, -1).contiguous()
         output["vq-loss"] = q_loss
         if self.training:
-            output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
+           output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
 
         return z_q, output, distance_prob
 

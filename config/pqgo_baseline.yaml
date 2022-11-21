@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_10214_32*16_decX_bs16"
+  name: "PQGO_256_64*16_decX_bs8_jsd0.1"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -30,8 +30,8 @@ model:
 
   vq:
     vq_type: "param"                          # "ema", "param"
-    num_codebooks: [ 1024 ] # 512
-    embed_dims: [ 512 ]
+    num_codebooks: [ 256 ] # 512
+    embed_dims: [ 1024 ]
     beta: 0.25
     normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
@@ -41,7 +41,7 @@ model:
     pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-6
-    num_pq: [ 32 ]             # 64               # 1 for vq
+    num_pq: [ 64 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
     n_kmeans: 8
     use_kmeans_sampling: false                # default false, true
@@ -52,7 +52,7 @@ loss:
   recon_weight: 0.0
   vq_weight: 1.0
   info_nce_weight: 0.0
-  jsd_weight: 1.0
+  jsd_weight: 0.1
   margin_weight: 0.0
 
   info_nce:
@@ -73,12 +73,12 @@ loss:
     pos_intra_shift: 0.08
 
     # cocostuff27 with vit-base
-    # neg_inter_weight: 0.15
-    # pos_inter_weight: 1
-    # pos_intra_weight: 0.1
-    # neg_inter_shift: 1
-    # pos_inter_shift: 0.2
-    # pos_intra_shift: 0.12
+#    neg_inter_weight: 0.15
+#    pos_inter_weight: 1
+#    pos_intra_weight: 0.1
+#    neg_inter_shift: 1
+#    pos_inter_shift: 0.2
+#    pos_intra_shift: 0.12
 
     zero_clamp: true
     pointwise: true
@@ -108,7 +108,7 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 4  # total
+    batch_size: 16  # total
     num_workers: 8  # total
   val:
     batch_size: 8  # total

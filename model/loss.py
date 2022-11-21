@@ -479,9 +479,6 @@ class JSDPosLoss(nn.Module):
         :param q: (b, hw, dim)
         :return:
         '''
-        # broadcasting ...
-        # p = p[:, None, ...]  # (b, 1, selected, dim)
-        # q = q[:, :, None, :]  # (b, hw, 1, dim)
 
         m = torch.clamp((p + q) * 0.5, 1e-7, 1).log()  # (b, hw, selected, dim)
         loss = (self.kl(m, p) + self.kl(m, q)) * 0.5  # (b, hw, selected, dim)
@@ -547,24 +544,33 @@ class JSDPosLoss(nn.Module):
 
         # select random 11 patches per image
 
-        rand_11 = torch.randint(0, h * w, (b, self.num_query,), device=z.device)  # (b, 11)
+        rand_11 = torch.randint(0, h * w, (b, self.num_query,), device=z.device)  # (b, num_query)
         for a in range(b):
             rand_11[a] += (a * h * w)
-        flat_z = z.reshape(-1, d)
-        sample_z = F.embedding(rand_11, flat_z)  # (b, 11, d)
 
-        flat_z_dis = z_dis.reshape(-1, num_pq)
-        sample_z_dis = F.embedding(rand_11, flat_z_dis)  # (b, 11, num_pq)
+        sample_z = F.embedding(rand_11, z.reshape(-1, d))  # (b, num_query, d)
+        sample_z_dis = F.embedding(rand_11, z_dis.reshape(-1, num_pq))  # (b, num_query, num_pq)
 
-        attn = torch.einsum("bsc,bdc->bsd", sample_z, z_pos)
-        attn -= attn.mean(dim=-1, keepdim=True)
-        attn = attn.clamp(0)
-        mask = (attn > 0)  # (b, 11, hw)
+        with torch.no_grad():
+            attn = torch.einsum("bsc,bdc->bsd", sample_z, z_pos)
+            attn -= attn.mean(dim=-1, keepdim=True)
+            attn = attn.clamp(0)
 
-        sample_z_dis = sample_z_dis.unsqueeze(-2).repeat(1, 1, h * w, 1)
-        z_pos_dis = z_pos_dis.unsqueeze(1).repeat(1, self.num_query, 1, 1)
+            mask = (attn > 0)  # (b, num_query, hw)
 
-        loss = self.jsd(sample_z_dis[mask], z_pos_dis[mask])
+            #################
+            spatial_index = torch.arange(h * w).unsqueeze(0).unsqueeze(0).repeat(b, self.num_query, 1)[mask].tolist()
+            query_index = torch.arange(self.num_query).unsqueeze(0).unsqueeze(-1).repeat(b, 1, h * w)[mask].tolist()
+            batch_index = torch.arange(b).reshape(b, 1, 1).repeat(1, self.num_query, h * w)[mask].tolist()
+
+        loss = self.jsd(z_pos_dis[batch_index, spatial_index, :], sample_z_dis[batch_index, query_index, :])
+        #################
+
+        # sample_z_dis = sample_z_dis.unsqueeze(-2).repeat(1, 1, h * w, 1)  # (b, num_query, hw, num_pq)
+        # z_pos_dis = z_pos_dis.unsqueeze(1).repeat(1, self.num_query, 1, 1)  # (b, num_query, hw, num_pq)
+        # loss = self.jsd(sample_z_dis[mask], z_pos_dis[mask])
+
+        del sample_z, sample_z_dis, z_pos, z_pos_dis, mask, attn, rand_11, z, spatial_index, query_index, batch_index
 
         return loss
 

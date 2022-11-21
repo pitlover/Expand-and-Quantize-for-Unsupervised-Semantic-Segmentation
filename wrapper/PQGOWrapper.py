@@ -28,6 +28,7 @@ class PQGOWrapper(nn.Module):
         self.stego_weight = cfg["loss"]["stego_weight"]
         self.recon_weight = cfg["loss"]["recon_weight"]
         self.vq_weight = cfg["loss"]["vq_weight"]
+        self.jsd_weight = cfg["loss"]["jsd_weight"]
 
         self.output_type = cfg["eval"]["output_type"]
         self.use_kmeans_sampling = cfg["model"]["vq"]["use_kmeans_sampling"]
@@ -71,6 +72,9 @@ class PQGOWrapper(nn.Module):
 
         if self.vq_weight > 0.0:
             model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
+
+        if self.training and self.jsd_weight > 0.0:
+            model_loss = model_loss + (output["jsd-loss"] * self.jsd_weight)
 
         output["loss"] = model_loss
 

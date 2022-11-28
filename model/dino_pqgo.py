@@ -92,7 +92,6 @@ class DIONPQGO(nn.Module):
         # dec_proj = []
         # for i in range(num_dec_blocks):
         #     dec_proj.append(
-        #         # DecResBlock(self.feat_dim, self.feat_dim))
         #         DecResBlock(self.hidden_dim,
         #                     self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
         # self.dec_proj = nn.Sequential(*dec_proj)
@@ -132,12 +131,13 @@ class DIONPQGO(nn.Module):
             code_pos = None  # placeholder
 
         quantized_feat, outputs, distance_prob = self.vq_blocks[0](code, code_pos, it=it)  # (2b, hidden_dim, h, w)
+        # recon = self.dec_proj(quantized_feat)
 
         # TODO vq part
         if self.training:
             # TODO vq part -> need remove
             outputs["stego-loss"] = self.stego_loss(dino_feat, dino_feat_pos, code, code_pos)
-
+        # outputs["recon-loss"] = F.mse_loss(recon, dino_feat)
         # return code, None, outputs
         return code, quantized_feat, outputs
 
@@ -683,7 +683,6 @@ class Codebook(nn.Module):
             output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
 
         return z_q, output, distance_prob
-
 
 class ProductQuantizerWrapper(nn.Module):
 

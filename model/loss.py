@@ -562,14 +562,15 @@ class JSDPosLoss(nn.Module):
             batch = torch.arange(start=0, end=b * h * w, step=h * w, device=z.device).unsqueeze(-1).unsqueeze(-1)
             batch_attn = attn + batch
 
-            z_pos_dis = torch.index_select(z_pos_dis.reshape(-1, z_pos_dis.shape[-1]), 0, batch_attn.reshape(-1))
-            sample_z_dis = sample_z_dis.repeat(self.num_pos, 1, 1).reshape(-1, sample_z_dis.shape[-1])
+            z_pos_dis_ = torch.index_select(z_pos_dis.reshape(-1, num_pq), 0, batch_attn.reshape(-1))
+            sample_z_dis_ = sample_z_dis.unsqueeze(1).repeat(1, self.num_pos, 1, 1).reshape(-1, num_pq)
+
             #################
             # spatial_index = torch.arange(h * w).unsqueeze(0).unsqueeze(0).repeat(b, self.num_query, 1)[mask].tolist()
             # query_index = torch.arange(self.num_query).unsqueeze(0).unsqueeze(-1).repeat(b, 1, self.num_pos)[mask].tolist()
             # batch_index = torch.arange(b).reshape(b, 1, 1).repeat(1, self.num_query, self.num_pos)[mask].tolist()
 
-        loss = self.jsd(sample_z_dis, z_pos_dis)
+        loss = self.jsd(sample_z_dis_, z_pos_dis_)
         # loss = self.jsd(z_pos_dis[batch_index, spatial_index, :], sample_z_dis[batch_index, query_index, :])
         #################
 

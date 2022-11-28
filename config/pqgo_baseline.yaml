@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_256_64*16_decX_jsd0.1_16"
+  name: "PQGO_256_64*16_decX_ts0.1_jsd10_bs16"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -27,6 +27,7 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
   last_norm: false
+  dec_num_blocks : 3
 
   vq:
     vq_type: "param"                          # "ema", "param"
@@ -52,7 +53,7 @@ loss:
   recon_weight: 0.0
   vq_weight: 1.0
   info_nce_weight: 0.0
-  jsd_weight: 0.1
+  jsd_weight: 10.0
   margin_weight: 0.0
 
   info_nce:
@@ -61,9 +62,9 @@ loss:
     temperature: 1.0                          # TODO need check
     cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
   jsd:
-    num_query : 11
-    num_pos : 30
-    temperature : 1.0 # TODO need check
+    num_query : 7
+    num_pos : 10
+    temperature : 0.1 # TODO need check
   stego:
     # cocostuff27 with vit-small
     neg_inter_weight: 0.63

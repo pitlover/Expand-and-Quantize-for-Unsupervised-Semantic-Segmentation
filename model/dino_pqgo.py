@@ -8,7 +8,7 @@ import random
 from model.dino import DinoFeaturizer
 # TODO kmeans sampling
 # from model.blocks.resnet_linear import EncResBlock, DecResBlock
-from model.blocks.resnet import EncResBlock, DecResBlock
+from model.blocks.module import EncResBlock, DecResBlock
 
 from utils.dist_utils import all_reduce_tensor
 import numpy as np

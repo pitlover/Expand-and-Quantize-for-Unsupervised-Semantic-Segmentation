@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_256_64*16_decX_ts0.1_jsd10_bs16"
+  name: "EMA_symm"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -15,7 +15,7 @@ is_visualize: false                           # default false, true
 visualize_path: "./visualize/skt"
 # ---------------------------------------------------------------- #
 resume:
-  checkpoint: "./"                          # default null
+  checkpoint: null # "./"                          # default null
 
 # ---------------------------------------------------------------- #
 model:
@@ -27,44 +27,23 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
   last_norm: false
-  dec_num_blocks : 3
+  hidden_dim: 70
+  encoder:
+    temperature: 0.1
+    momentum: 0.999
+  memory_bank:
+    n_cluster: ${num_classes}
+    num_support: 256
 
-  vq:
-    vq_type: "param"                          # "ema", "param"
-    num_codebooks: [ 256 ] # 512
-    embed_dims: [ 1024 ]
-    beta: 0.25
-    normalize: "l2"                           # l2, z_norm, z_trainable, none
-    use_restart: false                        # default false, true
-    use_split: false                        # default false, true
-    use_weighted_sum: false                   # default false, true
-    need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
-    pq_dropout: 0.0                         # defulat(ratio of pq mask) : 0.0,
-    decay: 0.99
-    eps: 1.0e-6
-    num_pq: [ 64 ]             # 64               # 1 for vq
-    agg_type: "concat"                        # add, concat
-    n_kmeans: 8
-    use_kmeans_sampling: false                # default false, true
 
 # ---------------------------------------------------------------- #
 loss:
-  stego_weight: 1.0
-  recon_weight: 0.0
-  vq_weight: 1.0
-  info_nce_weight: 0.0
-  jsd_weight: 10.0
-  margin_weight: 0.0
+  mse_weight: 0.0
+  stego_weight: 0.0
 
   info_nce:
-    normalize: "l2"
-    neg_sample: 10                           # TODO need check
-    temperature: 1.0                          # TODO need check
-    cal_type: "cosine"                      # TODO need check "distance" "cosine" "random"
-  jsd:
-    num_query : 7
-    num_pos : 10
-    temperature : 0.1 # TODO need check
+    temperature: 0.1
+
   stego:
     # cocostuff27 with vit-small
     neg_inter_weight: 0.63
@@ -75,12 +54,12 @@ loss:
     pos_intra_shift: 0.08
 
     # cocostuff27 with vit-base
-#    neg_inter_weight: 0.15
-#    pos_inter_weight: 1
-#    pos_intra_weight: 0.1
-#    neg_inter_shift: 1
-#    pos_inter_shift: 0.2
-#    pos_intra_shift: 0.12
+    #    neg_inter_weight: 0.15
+    #    pos_inter_weight: 1
+    #    pos_intra_weight: 0.1
+    #    neg_inter_shift: 1
+    #    pos_inter_shift: 0.2
+    #    pos_intra_shift: 0.12
 
     zero_clamp: true
     pointwise: true
@@ -88,13 +67,12 @@ loss:
     feature_samples: 11
     neg_samples: 5
 
-
 # ---------------------------------------------------------------- #
 dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    model_type : ${model.pretrained.model_type}
+    model_type: ${model.pretrained.model_type}
     crop_type: "five"                         # null, "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
@@ -103,17 +81,17 @@ dataset:
   val:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    model_type : ${model.pretrained.model_type}
+    model_type: ${model.pretrained.model_type}
     crop_type: null
     loader_crop_type: "center"                # none for voc
     res: 320
 
 dataloader:
   train:
-    batch_size: 16  # total
+    batch_size: 32  # total
     num_workers: 8  # total
   val:
-    batch_size: 8  # total
+    batch_size: 16  # total
     num_workers: 8  # total
 
 # ---------------------------------------------------------------- #
@@ -140,7 +118,7 @@ scheduler:
 
 # ---------------------------------------------------------------- #
 eval:
-  output_type: "vq0" # TODO chagned to vq0 -> for vq
+  output_type: "feat" # TODO chagned to vq0 -> for vq
   extra_classes: 0
 
 # ---------------------------------------------------------------- #

@@ -88,7 +88,6 @@ def train_epoch(
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
-            # loss.backward() # TODO fp16
             scaler.scale(loss).backward()
 
             backward_time = time.time() - backward_start_time
@@ -100,7 +99,6 @@ def train_epoch(
             for optim, sched in zip(optimizers, schedulers):
                 scaler.step(optim)
                 scaler.update()
-                # optim.step() # TODO fp16
                 sched.step()
             step_time = time.time() - step_start_time
 
@@ -258,8 +256,8 @@ def valid_epoch(
                 result[k] += v
         count += 1
 
-        # if cfg["is_visualize"] and is_crf:
-        if cfg["is_visualize"] and (current_iter % 2500 == 1):
+        if cfg["is_visualize"] and is_crf:
+        # if cfg["is_visualize"] and (current_iter % 2500 == 1):
             saved_data["img_path"].append("".join(img_path))
             saved_data["cluster_preds"].append(cluster_preds.cpu().squeeze(0))
             saved_data["linear_preds"].append(linear_preds.cpu().squeeze(0))
@@ -269,8 +267,8 @@ def valid_epoch(
     cluster_result = cluster_m.compute()  # {iou, accuracy}
     linear_result = linear_m.compute()  # {iou, accuracy}
 
-    # if cfg["is_visualize"] and is_crf:
-    if cfg["is_visualize"] and (current_iter % 2500 == 1):
+    if cfg["is_visualize"] and is_crf:
+    # if cfg["is_visualize"] and (current_iter % 2500 == 1):
         os.makedirs(cfg["visualize_path"], exist_ok=True)
         visualization(cfg["visualize_path"] + "/" + str(current_iter), cfg["dataset_name"], saved_data, cluster_m)
 

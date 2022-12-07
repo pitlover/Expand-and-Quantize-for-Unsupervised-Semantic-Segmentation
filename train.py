@@ -59,22 +59,14 @@ def train_epoch(
 
     data_start_time = time.time()
 
-    # TODO Queue (prototype) design
-    # queue = torch.zeros(
-    #     cfg["loss"]["cluster"]["queue_stack_iter"] * 2 * cfg["dataloader"]["train"][
-    #         "batch_size"] // get_world_size() * (cfg["dataset"]["train"]["res"] // 8) ** 2,  # TODO check queue size
-    #     cfg["model"]["hidden_dim"],
-    #     device=device)
-
     for it, data in enumerate(train_dataloader):
-        # if it < cfg["loss"]["cluster"]["queue_start_iter"]:
-        #     queue = None
         s = time_log()
         s += f"Current iter: {it} (epoch {current_epoch}, " \
              f"epoch done: {it / len(train_dataloader) * 100:.2f} %)\n"
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
         aug_img = data["aug_img"].to(device, non_blocking=True)
+        img_pos = data["img_pos"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
         data_time = time.time() - data_start_time
         # -------------------------------- loss -------------------------------- #
@@ -85,27 +77,21 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img=img, aug_img=aug_img, label=label, img_pos=img_pos,
+                                              it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
             scaler.scale(loss).backward()
-            # loss.backward()
             backward_time = time.time() - backward_start_time
 
             step_start_time = time.time()
             scaler.unscale_(optimizers[0])
             grad_norm = clip_grad_norm_(model_m.model.parameters(), max_norm=clip_grad)
 
-            # if it < cfg["loss"]["cluster"]["freeze_prototypes_niter"]:
-            #     for name, p in model.named_parameters():
-            #         if "prototypes" in name:
-            #             p.grad = None
-
             for optim, sched in zip(optimizers, schedulers):
                 scaler.step(optim)
                 scaler.update()
-                # optim.step()
                 sched.step()
             step_time = time.time() - step_start_time
 
@@ -113,7 +99,7 @@ def train_epoch(
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
                 with torch.cuda.amp.autocast(enabled=True):
-                    total_loss, output, _ = model(img, aug_img, label
+                    total_loss, output, _ = model(img=img, aug_img=aug_img, img_pos=img_pos, label=label
                                                   )  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
                 # loss.backward()
@@ -121,7 +107,8 @@ def train_epoch(
         else:  # non-update step
             # and not DDP
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img, aug_img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _ = model(img=img, aug_img=aug_img, img_pos=img_pos,
+                                              label=label)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             # loss.backward()
@@ -156,7 +143,7 @@ def train_epoch(
 
         if (it > 0) and (it % valid_interval == 0):
             _, cluster_result, linear_result = valid_epoch(
-                model, valid_dataloader, cfg, device, it, is_crf=False)
+                model, valid_dataloader, cfg, device, current_iter, is_crf=False)
 
             if is_master():
                 if best_metric["Cluster_mIoU"] <= cluster_result["iou"].item():
@@ -231,7 +218,8 @@ def valid_epoch(
     result = dict()
     count = 0
     saved_data = defaultdict(list)
-    os.makedirs(cfg["visualize_path"], exist_ok=True)
+    if cfg["is_visualize"]:
+        os.makedirs(cfg["visualize_path"], exist_ok=True)
 
     for it, data in enumerate(dataloader):
         # -------------------------------- data -------------------------------- #
@@ -241,7 +229,8 @@ def valid_epoch(
         img_path = data["img_path"]
         # -------------------------------- loss -------------------------------- #
         with torch.cuda.amp.autocast(enabled=True):
-            _, output, (linear_preds, cluster_preds) = model(img, aug_img, label, is_crf=is_crf)
+            _, output, (linear_preds, cluster_preds) = model(img=img, aug_img=aug_img, label=label,
+                                                             is_crf=is_crf)
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 
@@ -252,7 +241,8 @@ def valid_epoch(
                 result[k] += v
         count += 1
 
-        if cfg["is_visualize"] and (current_iter == 10000):
+        # if cfg["is_visualize"] and is_crf:
+        if cfg["is_visualize"] and (current_iter % 2500 == 1):
             os.makedirs(cfg["visualize_path"], exist_ok=True)
             saved_data["img_path"].append("".join(img_path))
             saved_data["cluster_preds"].append(cluster_preds.cpu().squeeze(0))

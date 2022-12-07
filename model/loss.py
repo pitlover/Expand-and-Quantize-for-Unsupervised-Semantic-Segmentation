@@ -203,6 +203,76 @@ class InfoNCELoss(nn.Module):
         return loss
 
 
+class ProxyLoss(nn.Module):
+    def __init__(self,
+                 normalize: str = "l2",
+                 temperature: float = 1.0,
+                 reduction: str = "mean",
+                 cal_type: str = "random"):
+        super().__init__()
+
+        self.normalize = normalize
+        self.temperature = temperature
+        self.reduction = reduction
+        self.cal_type = cal_type
+
+    def _normalize(self, x):
+        if self.normalize == "l2":
+            x_norm = F.normalize(x, dim=-1)
+        elif self.normalize == "z_norm":  # z-normalize
+            x_std, x_mean = torch.std_mean(x, dim=1, keepdim=True)  # (n, 1)
+            x_norm = (x - x_mean) / (x_std + 1e-5)
+        elif self.normalize == "none":
+            x_norm = x
+        else:
+            raise ValueError(f"Unsupported normalize type {self.normalize}")
+
+        return x_norm
+
+    def paired_similarity(self, x, neg):
+        x = x.unsqueeze(1)
+        neg_similarity = torch.matmul(x, neg.transpose(-2, -1))  # (bhw, 1, d) * (bhw, d, k) -> (bhw, 1, k)
+        neg_similarity = neg_similarity.squeeze(1)  # (bhw, k)
+        neg_similarity = torch.exp(neg_similarity / self.temperature)
+
+        return neg_similarity
+
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+        """
+        :param x1: (b, d, h, w) -> (b, h, w, d) -> (bhw, d)
+        :param x2: (b, d, h, w) -> (b, h, w, d) -> (bhw, d)
+               neg: (bhw, k, d), k = neg_sample per pixel
+
+        :return:
+        """
+        b, d, h, w = x1.shape
+        x1 = x1.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
+        flat_x1 = x1.view(-1, d)  # (bhw, d)
+
+        x2 = x2.permute(0, 2, 3, 1).contiguous()
+        flat_x2 = x2.view(-1, d)
+
+        x1_norm = self._normalize(flat_x1)
+        x2_norm = self._normalize(flat_x2)
+        neg_norm = self._normalize(neg)
+
+        pos_similarity = torch.multiply(x1_norm, x2_norm)
+        pos_similarity = torch.exp(pos_similarity / self.temperature)
+        neg_similarity = self.paired_similarity(x1_norm, neg_norm)
+
+        positive = torch.sum(pos_similarity, dim=1)  # (bhw, )
+        negative = torch.sum(neg_similarity, dim=1)  # (bhw, k) -> (bhw) #noqa
+
+        loss = -(torch.log(positive) - torch.log(positive + negative))
+
+        if self.reduction == "sum":
+            loss = torch.sum(loss)
+        elif self.reduction == "mean":
+            loss = torch.mean(loss)
+
+        return loss
+
+
 class ClusterLoss(nn.Module):
     def __init__(self,
                  temperature: float,

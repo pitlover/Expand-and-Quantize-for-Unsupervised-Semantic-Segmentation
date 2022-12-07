@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 import torchvision.transforms as transforms
 
-from model.blocks.resnet import EncResBlock
+from model.blocks.module import EncResBlock
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.loss import InfoNCELoss, ClusterLoss, MarginRankingLoss
 

@@ -17,6 +17,33 @@ class LayerNorm2d(nn.LayerNorm):
         return x
 
 
+class SegmentationHead(nn.Module):
+
+    def __init__(self, input_dim: int, hidden_dim: int):
+        super().__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+        self.cluster1 = self.make_clusterer()
+        self.cluster2 = self.make_nonlinear_clusterer()
+
+    def make_clusterer(self):
+        return torch.nn.Sequential(
+            torch.nn.Conv2d(self.input_dim, self.hidden_dim, (1, 1)))
+
+    def make_nonlinear_clusterer(self):
+        return torch.nn.Sequential(
+            torch.nn.Conv2d(self.input_dim, self.input_dim, (1, 1)),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(self.input_dim, self.hidden_dim, (1, 1)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.cluster1(x)
+        out += self.cluster2(x)
+
+        return out
+
+
 class EncResBlock(nn.Module):
 
     def __init__(self, in_channel: int, out_channel: int):

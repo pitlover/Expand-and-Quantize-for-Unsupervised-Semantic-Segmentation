@@ -21,6 +21,7 @@ from model.dino_new_vq import DINONewVq
 from model.dino_spq import DINOSPQ
 from model.quantizer import EMAVectorQuantizer, EmbeddingEMA, VectorQuantizer
 from model.dino_pqgo import DIONPQGO
+from model.dino_ema import DIONEMA
 
 from wrapper.StegoWrapper import StegoWrapper
 from wrapper.UnsegWrapper import DINOUnSegWrapper
@@ -28,6 +29,7 @@ from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
 from wrapper.NewVQWrapper import DINONewVQWrapper
 from wrapper.PQGOWrapper import PQGOWrapper
+from wrapper.EMAWrapper import EMAWrapper
 
 def build_model(cfg: dict,
                 name: str = None,
@@ -35,6 +37,8 @@ def build_model(cfg: dict,
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
+    elif "ema" in name:
+        model = EMAWrapper(cfg, DIONEMA(cfg["model"], cfg["loss"]))
     elif "pqgo" in name:
         model = PQGOWrapper(cfg, DIONPQGO(cfg["model"], cfg["loss"]))
     elif "stego" in name:

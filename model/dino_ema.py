@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 import faiss
 import numpy as np
+from utils.dist_utils import all_reduce_tensor
 
 from model.dino import DinoFeaturizer
 from model.blocks.module import SegmentationHead
@@ -44,8 +45,8 @@ class DIONEMA(nn.Module):
         #  -------- memory bank -------- #
         self.need_initialize = True
         self.centroid = nn.Embedding(self.n_cluster, self.hidden_dim)
-        self.register_buffer("queue", torch.randn(self.n_cluster, self.num_support, self.hidden_dim))
-
+        self.register_buffer("queue", torch.randn(self.n_cluster, self.num_support, self.hidden_dim))  # (27, 256, 70)
+        self.margin = cfg["memory_bank"]["margin"]
         # -------- loss -------- #
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
         self.info_nce = ProxyLoss(temperature=cfg_loss["info_nce"]["temperature"])
@@ -84,7 +85,8 @@ class DIONEMA(nn.Module):
         selected_support_ = x[idx]  # (n_cluster * num_support, hidden_dim)
         selected_support = selected_support_.view(-1, self.num_support,
                                                   self.hidden_dim)  # (n_cluster, num_support, hidden_dim)
-        centroids = torch.from_numpy(query_vector).to(x.device)
+        # centroids = torch.from_numpy(query_vector).to(x.device)
+        centroids = torch.mean(selected_support, dim=1)  # (n_cluster, 1, hidden_dim) # TODO check centroids
         self.centroid.weight.data.copy_(centroids)
         self.queue.copy_(selected_support)
 
@@ -106,15 +108,15 @@ class DIONEMA(nn.Module):
         # index_ = [[a] * self.num_support for a in range(27)]
         # index_ = [j for sub in index_ for j in sub]
         # plt.figure(figsize=(10, 10))
+        # plt.scatter(support[:, 0], support[:, 1], c=index_, cmap=plt.cm.hsv)
         # plt.scatter(center[:, 0], center[:, 1], s=100, c=index, marker="+", cmap=plt.cm.hsv)
         # for i, txt in enumerate(index):
         #     plt.annotate(f"{txt}", (center[i, 0], center[i, 1]))
-        # plt.scatter(support[:, 0], support[:, 1], c=index_, cmap=plt.cm.hsv)
         # for i, txt in enumerate(index_):
         #     plt.annotate(f"{txt}", (support[i, 0], support[i, 1]))
         #
         # plt.savefig(f'./plot/proxy/total_{self.num_support}.png')
-
+        # exit()
 
     @torch.no_grad()
     def _momentum_update_ema_head(self):
@@ -135,6 +137,54 @@ class DIONEMA(nn.Module):
         norm_x = F.normalize(x, dim=-1)
 
         return norm_x
+
+    def _update_queue(self, x, norm_x):
+        '''
+        Dequeue and Enqueue
+        : x : logits of teacher network :(b, d, h, w) -> (bhw, d)
+        :return:
+        '''
+
+        centroid_norm = F.normalize(self.centroid.weight, dim=-1)
+
+        distance = torch.sum(norm_x ** 2, dim=1, keepdim=True) + \
+                   torch.sum(centroid_norm ** 2, dim=1) - \
+                   2 * (torch.matmul(norm_x, centroid_norm.t()))  # (bhw, n_prototypes)
+        idx = torch.argmin(distance, dim=-1)  # (bhw)
+        idx_top2 = torch.topk(-distance, k=2, dim=-1)  # (bhw, 2)
+        flat_raw = self._flatten(x)
+
+        for i in range(self.n_cluster):
+            mask = torch.eq(idx, i)  # (bhw, )
+            above_margin_mark = (idx_top2.values[mask][:, 0] - idx_top2.values[mask][:, 1]) > self.margin
+            selected_support = flat_raw[mask][above_margin_mark]
+
+            # dequeue & enqueue
+
+            exit()
+        exit()
+
+    @torch.no_grad()
+    def _dequeue_and_enqueue(self, keys, queue, queue_ptr, queue_size):
+        # gather keys before updating queue
+        keys = keys.detach().clone().cpu()
+        gathered_list = all_reduce_tensor(keys)
+        keys = torch.cat(gathered_list, dim=0).cuda()
+
+        batch_size = keys.shape[0]
+
+        ptr = int(queue_ptr)
+
+        queue[0] = torch.cat((queue[0], keys.cpu()), dim=0)
+        if queue[0].shape[0] >= queue_size:
+            queue[0] = queue[0][-queue_size:, :]
+            ptr = queue_size
+        else:
+            ptr = (ptr + batch_size) % queue_size  # move pointer
+
+        queue_ptr[0] = ptr
+
+        return batch_size
 
     def forward(self, img: torch.Tensor,
                 aug_img: torch.Tensor = None,
@@ -179,16 +229,8 @@ class DIONEMA(nn.Module):
             self._init_memory_bank(z1_1)
 
         # update queue
-        centroid_norm = F.normalize(self.centroid.weight, dim=-1)
-        distance = torch.sum(norm_z1_1 ** 2, dim=1, keepdim=True) + \
-                   torch.sum(centroid_norm ** 2, dim=1) - \
-                   2 * (torch.matmul(norm_z1_1, centroid_norm.t()))  # (bhw, n_prototypes)
-        idx = torch.argmin(distance, dim=-1)
-        pos_proxy = self.centroid(idx)  # (bhw, hidden_dim)
-
-        self.queue[idx][-1] = z1_1
-        positives = self.queue[idx]  # (bhw, num_support, hidden_dim)
-        print(positives.shape)
+        self._update_queue(z1_1,
+                           norm_z1_1)  # TODO check if it normalize, cur_status: compare with normalize but update with nonnormalized
         exit()
         # update centroid
 

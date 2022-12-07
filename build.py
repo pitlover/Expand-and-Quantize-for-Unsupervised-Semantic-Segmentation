@@ -31,6 +31,7 @@ from wrapper.NewVQWrapper import DINONewVQWrapper
 from wrapper.PQGOWrapper import PQGOWrapper
 from wrapper.EMAWrapper import EMAWrapper
 
+
 def build_model(cfg: dict,
                 name: str = None,
                 world_size: int = 4) -> nn.Module:
@@ -99,9 +100,9 @@ def build_optimizer(cfg: dict, params):
     if optimizer_type == "adam":
         optimizer = Adam(params,
                          lr=cfg["lr"])
-                         # lr=cfg["lr"],
-                         # betas=cfg.get("betas", (0.9, 0.999)),
-                         # weight_decay=cfg.get("weight_decay", 0.0))
+        # lr=cfg["lr"],
+        # betas=cfg.get("betas", (0.9, 0.999)),
+        # weight_decay=cfg.get("weight_decay", 0.0))
     elif optimizer_type == "adamw":
         optimizer = AdamW(params,
                           lr=cfg["lr"],
@@ -160,6 +161,7 @@ def build_dataset(cfg: dict, mode: str = "train") -> UnSegDataset:
     )
     return dataset
 
+
 def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> DataLoader:
     # cfg = cfg["dataloader"]
     cfg = cfg[mode]
@@ -186,8 +188,8 @@ def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> D
         world_size = get_world_size()
         loader = DataLoader(
             dataset,
-            batch_size=max(cfg["batch_size"] // world_size, 1),
-            # batch_size=max(cfg["batch_size"] // world_size, 1) if "train" in mode else 1, # for visualization
+            batch_size=1 if "val" in mode and cfg["is_visualize"] else max(cfg["batch_size"] // world_size, 1),
+            # for visualization
             num_workers=max((cfg["num_workers"] + world_size - 1) // world_size, 1),
             pin_memory=True,
             sampler=ddp_sampler

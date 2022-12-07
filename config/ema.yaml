@@ -27,13 +27,14 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
   last_norm: false
-  hidden_dim: 70
+  hidden_dim: 256 # TODO check
   encoder:
     temperature: 0.1
     momentum: 0.999
   memory_bank:
     n_cluster: ${num_classes}
     num_support: 256
+    margin : 0.1
 
 
 # ---------------------------------------------------------------- #
@@ -87,12 +88,14 @@ dataset:
     res: 320
 
 dataloader:
+
   train:
-    batch_size: 32  # total
+    batch_size: 2  # total
     num_workers: 8  # total
   val:
-    batch_size: 16  # total
+    batch_size: 2  # total
     num_workers: 8  # total
+    is_visualize: ${is_visualize}
 
 # ---------------------------------------------------------------- #
 optimizer:

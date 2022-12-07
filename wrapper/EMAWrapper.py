@@ -52,7 +52,6 @@ class EMAWrapper(nn.Module):
         model_loss = torch.zeros(1, device=img.device)
         b, _, H, W = img.shape
         output = dict()
-
         code, other_code, output = self.model(img=img, aug_img=aug_img, img_pos=img_pos, it=it)
 
         if self.training and self.stego_weight > 0.0:

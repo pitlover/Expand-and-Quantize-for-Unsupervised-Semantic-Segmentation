@@ -249,7 +249,7 @@ class ProxyLoss(nn.Module):
             anchor_feat = (queue[i][rand_idx].clone().cuda())
 
             with torch.no_grad():
-                centroid = (centroids[i].unsqueeze(0).unsqueeze(0).repeat(self.num_queries, 1,
+                centroid = (centroids[i].weight.unsqueeze(0).unsqueeze(0).repeat(self.num_queries, 1,
                                                                           1))  # (num_queries, 1, hidden_dim)
                 neg_feat = torch.concat((queue[:i], queue[i + 1:]), dim=0)
                 print(neg_feat.shape)

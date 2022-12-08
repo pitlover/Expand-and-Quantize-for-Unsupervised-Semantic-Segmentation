@@ -208,6 +208,8 @@ class ProxyLoss(nn.Module):
                  normalize: str = "l2",
                  temperature: float = 1.0,
                  reduction: str = "mean",
+                 num_queries: int = 50,
+                 num_neg: int = 256,
                  cal_type: str = "random"):
         super().__init__()
 
@@ -215,6 +217,8 @@ class ProxyLoss(nn.Module):
         self.temperature = temperature
         self.reduction = reduction
         self.cal_type = cal_type
+        self.num_queries = num_queries
+        self.num_neg = num_neg
 
     def _normalize(self, x):
         if self.normalize == "l2":
@@ -229,41 +233,34 @@ class ProxyLoss(nn.Module):
 
         return x_norm
 
-    def paired_similarity(self, x, neg):
-        x = x.unsqueeze(1)
-        neg_similarity = torch.matmul(x, neg.transpose(-2, -1))  # (bhw, 1, d) * (bhw, d, k) -> (bhw, 1, k)
-        neg_similarity = neg_similarity.squeeze(1)  # (bhw, k)
-        neg_similarity = torch.exp(neg_similarity / self.temperature)
+    def forward(self, queue: torch.Tensor, centroids: torch.Tensor) -> torch.Tensor:
+        '''
 
-        return neg_similarity
-
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
-        """
-        :param x1: (b, d, h, w) -> (b, h, w, d) -> (bhw, d)
-        :param x2: (b, d, h, w) -> (b, h, w, d) -> (bhw, d)
-               neg: (bhw, k, d), k = neg_sample per pixel
-
+        :param queue: (n_classes, queue_size, hidden_dim)
+        :param centroids: (n_classes, hidden_dim)
         :return:
-        """
-        b, d, h, w = x1.shape
-        x1 = x1.permute(0, 2, 3, 1).contiguous()  # (b, h, w, d)
-        flat_x1 = x1.view(-1, d)  # (bhw, d)
+        '''
+        n_cluster = len(queue)
+        loss = torch.tensor(0, device=centroids.weight.device)
 
-        x2 = x2.permute(0, 2, 3, 1).contiguous()
-        flat_x2 = x2.view(-1, d)
+        for i in range(n_cluster):
+            # select anchor pixel
+            rand_idx = torch.randint(queue[i].shape[0], size=(self.num_queries,))
+            anchor_feat = (queue[i][rand_idx].clone().cuda())
 
-        x1_norm = self._normalize(flat_x1)
-        x2_norm = self._normalize(flat_x2)
-        neg_norm = self._normalize(neg)
+            with torch.no_grad():
+                centroid = (centroids[i].unsqueeze(0).unsqueeze(0).repeat(self.num_queries, 1,
+                                                                          1))  # (num_queries, 1, hidden_dim)
+                neg_feat = torch.concat((queue[:i], queue[i + 1:]), dim=0)
+                print(neg_feat.shape)
+                exit()
 
-        pos_similarity = torch.multiply(x1_norm, x2_norm)
-        pos_similarity = torch.exp(pos_similarity / self.temperature)
-        neg_similarity = self.paired_similarity(x1_norm, neg_norm)
+                all_feat = torch.cat((centroid, neg_feat), dim=1)  # (num_queires, 1+ neg, hidden_dim)
 
-        positive = torch.sum(pos_similarity, dim=1)  # (bhw, )
-        negative = torch.sum(neg_similarity, dim=1)  # (bhw, k) -> (bhw) #noqa
+            logits = torch.cosine_similarity(anchor_feat.unsqueeze(1), all_feat, dim=2)
 
-        loss = -(torch.log(positive) - torch.log(positive + negative))
+            loss = loss + F.cross_entropy(logits / self.temperature,
+                                          torch.zeros(self.num_queries, device=centroids.weight.device).long())
 
         if self.reduction == "sum":
             loss = torch.sum(loss)

@@ -11,7 +11,7 @@ wandb:
 seed: 10
 num_classes: 27
 dataset_name: "cocostuff27"                     # "potsdam", "cityscape", "cocostuff27"
-data_dir: "../Datasets/cocostuff"
+data_dir: "../Datasets/cocostuff27"
 is_visualize: false                           # default false, true
 visualize_path: "./visualize/"
 # ---------------------------------------------------------------- #
@@ -56,11 +56,11 @@ model:
 loss:
   stego_weight: 1.0
   vq_weight: 1.0
-  cls_weight : 1.0
+  cls_weight : 0.01
   recon_weight : 0.0
   info_nce_weight: 0.0
-  jsd_weight: 0.0
   margin_weight: 0.0
+  mse_weight : 1.0
 
   jsd:
     temperature : 1.0
@@ -129,7 +129,7 @@ dataloader:
     batch_size: 16  # total
     num_workers: 8  # total
   val:
-    batch_size: 16  # total
+    batch_size: 8  # total
     num_workers: 8  # total
     is_visualize: ${is_visualize}
 

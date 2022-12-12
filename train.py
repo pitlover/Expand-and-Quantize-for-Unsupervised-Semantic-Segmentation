@@ -432,10 +432,10 @@ def run(cfg: Dict, debug: bool = False) -> None:
     s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
     s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
     s += time_log()
-    s += "Final evaluation (after CRF)\n"
-    _, cluster_result, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=True)
-    s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-    s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+    # s += "Final evaluation (after CRF)\n"
+    # _, cluster_result, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=True)
+    # s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
+    # s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
 
     final_time = time.time() - final_start_time
     s += f"... time: {final_time:.3f} sec"

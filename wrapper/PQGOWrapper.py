@@ -26,9 +26,11 @@ class PQGOWrapper(nn.Module):
 
         # -------- Loss weight --------- #
         self.stego_weight = cfg["loss"]["stego_weight"]
-        self.recon_weight = cfg["loss"]["recon_weight"]
+        self.recon_weight = cfg["loss"].get("recon_weight", 0.0)
+        self.cls_weight = cfg["loss"].get("cls_weight", 0.0)
+        self.mse_weight = cfg["loss"].get("mse_weight", 0.0)
         self.vq_weight = cfg["loss"]["vq_weight"]
-        self.jsd_weight = cfg["loss"]["jsd_weight"]
+
 
         self.output_type = cfg["eval"]["output_type"]
         self.use_kmeans_sampling = cfg["model"]["vq"]["use_kmeans_sampling"]
@@ -61,6 +63,7 @@ class PQGOWrapper(nn.Module):
         output = dict()
 
         code, feat_vqs, output = self.model(img=img, aug_img=aug_img, img_pos=img_pos, it=it)
+
         # feat: (b, 384, 28, 28)
         # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...
         # output: {vq0-current-p10/50/90 , vq0-total-p10/50/90, vq0-loss, vq0-~loss, ..., recon-loss}
@@ -73,8 +76,11 @@ class PQGOWrapper(nn.Module):
         if self.vq_weight > 0.0:
             model_loss = model_loss + (output["vq-loss"] * self.vq_weight)
 
-        if self.training and self.jsd_weight > 0.0:
-            model_loss = model_loss + (output["jsd-loss"] * self.jsd_weight)
+        if self.cls_weight > 0.0:
+            model_loss = model_loss + (output["cls-loss"] * self.cls_weight)
+
+        if self.mse_weight > 0.0:
+            model_loss = model_loss + (output["mse-loss"] * self.mse_weight)
 
         output["loss"] = model_loss
 

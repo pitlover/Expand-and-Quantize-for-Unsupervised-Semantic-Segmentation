@@ -165,10 +165,10 @@ class DINOPQGOCLS(nn.Module):
             z1_2 = self.ema_head(dino_feat_aug)
             norm_z1_2 = self._normalize(z1_2).clone().detach()  # detach the gradient z2
 
+        quantized_feat, outputs, distance_prob, pseudo_labels = self.vq_blocks[0](z1_2)  # (2b, hidden_dim, h, w)
+
         loss1 = F.mse_loss(norm_z1_1, norm_z1_2)
         outputs["mse-loss"] = loss1
-
-        quantized_feat, outputs, distance_prob, pseudo_labels = self.vq_blocks[0](z1_2)  # (2b, hidden_dim, h, w)
 
         # TODO vq part
         if self.training:

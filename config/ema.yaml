@@ -12,7 +12,7 @@ num_classes: 27
 dataset_name: "cocostuff27"
 data_dir: "../Datasets/cocostuff"
 is_visualize: false                           # default false, true
-visualize_path: "./visualize/skt"
+visualize_path: "./visualize/"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null # "./"                          # default null
@@ -33,22 +33,21 @@ model:
     momentum: 0.999
   memory_bank:
     n_cluster: ${num_classes}
-    num_support: 256    # TODO check
-    margin: 0.1        # TODO check
-
+    num_support: 32    # TODO check
+    margin: 0.1       # TODO check
     queue_size: 30000
 
 
 # ---------------------------------------------------------------- #
 loss:
-  mse_weight: 0.0
+  mse_weight: 1.0
   stego_weight: 0.0
+  info_nce_weight : 1.0   # TODO check
 
   info_nce:
-    temperature: 0.5 # TODO check
-    num_queries : 50
+    temperature: 0.1 # TODO check
+    num_queries : 10
     num_neg: 256
-
 
   stego:
     # cocostuff27 with vit-small
@@ -94,10 +93,10 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 16  # total
+    batch_size: 32  # total
     num_workers: 8  # total
   val:
-    batch_size: 2  # total
+    batch_size: 32  # total
     num_workers: 8  # total
     is_visualize: ${is_visualize}
 

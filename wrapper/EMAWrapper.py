@@ -27,6 +27,7 @@ class EMAWrapper(nn.Module):
         # -------- Loss weight --------- #
         self.stego_weight = cfg["loss"]["stego_weight"]
         self.mse_weight = cfg["loss"]["mse_weight"]
+        self.bank_weight = cfg["loss"]["info_nce_weight"]
         self.output_type = cfg["eval"]["output_type"]
 
         if self.output_type == "feat":
@@ -60,6 +61,9 @@ class EMAWrapper(nn.Module):
         if self.mse_weight > 0.0:
             model_loss = model_loss + (output["mse-loss"] * self.mse_weight)
 
+        if self.bank_weight > 0.0:
+            model_loss = model_loss + (output["info-nce"] * self.bank_weight)
+
         output["loss"] = model_loss
 
         if self.output_type == "feat":
@@ -69,9 +73,9 @@ class EMAWrapper(nn.Module):
 
         linear_loss, linear_preds, cluster_loss, cluster_preds = self.evaluator(
             out, img, label=label, is_crf=is_crf)
+
         output["linear-loss"] = linear_loss
         output["cluster-loss"] = cluster_loss
-
         total_loss = model_loss + linear_loss + cluster_loss
 
         return total_loss, output, (linear_preds, cluster_preds)

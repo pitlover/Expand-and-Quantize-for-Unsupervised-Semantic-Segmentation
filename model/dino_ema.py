@@ -1,6 +1,6 @@
 from typing import Dict, Tuple, List
 
-import faiss
+import faiss # noqa
 import numpy as np
 import torch
 import torch.nn as nn
@@ -100,17 +100,15 @@ class DIONEMA(nn.Module):
         _, idx = index.search(query_vector, self.num_support)  # (n_cluster, n_kmeans_pos)
 
         idx = torch.from_numpy(idx)  # (n_cluster, num_support)
-        idx = idx.reshape(-1)
-        selected_support_ = x[idx]  # (n_cluster * num_support, hidden_dim)
-        selected_support = selected_support_.view(-1, self.num_support,
-                                                  self.hidden_dim)  # (n_cluster, num_support, hidden_dim)
+        idx = idx.reshape(-1)  # (n_cluster * num_support, hidden_dim)
+        selected_support = x[idx].view(-1, self.num_support,
+                                       self.hidden_dim)  # (n_cluster, num_support, hidden_dim)
         # centroids = torch.from_numpy(query_vector).to(x.device)
         centroids = torch.mean(selected_support, dim=1)  # (n_cluster, 1, hidden_dim) # TODO check centroids
         self.centroid.weight.data.copy_(centroids)
 
         for i in range(self.n_cluster):
-            self.queue[i] = selected_support[i].detach().clone().cpu()
-
+            self.queue[i] = selected_support[i]
         '''
         T-SNE visualization
         '''
@@ -178,14 +176,19 @@ class DIONEMA(nn.Module):
         for i in range(self.n_cluster):
             mask = torch.eq(idx, i)  # (bhw, )
             above_mrg = (idx_top2.values[mask][:, 0] - idx_top2.values[mask][:, 1]) > self.margin  # TODO check margin
+            # print(f"dis1 : {torch.mean(idx_top2.values[mask][:, 0])}")
+            # print(f"dis2 : {torch.mean(idx_top2.values[mask][:, 1])}")
+            # print(f"margin : {torch.mean(idx_top2.values[mask][:, 0]) - torch.mean(idx_top2.values[mask][:, 1])}")
             selected_support = flat_raw[mask][above_mrg]
+            # print(f"selected : {selected_support.shape[0]}")
+            # print("*"*10)
             # dequeue & enqueue
-            self._dequeue_and_enqueue(keys=selected_support, idx=i)
+            self._dequeue_and_enqueue(keys=selected_support, idx=i, device=x.device)
 
+        return centroid_norm[idx]
     @torch.no_grad()
     def gather_together(self, data):
         dist.barrier()
-
         world_size = dist.get_world_size()
         gather_data = [None for _ in range(world_size)]
         dist.all_gather_object(gather_data, data)
@@ -193,7 +196,7 @@ class DIONEMA(nn.Module):
         return gather_data
 
     @torch.no_grad()
-    def _dequeue_and_enqueue(self, keys, idx):
+    def _dequeue_and_enqueue(self, keys, idx, device):
         '''
 
         :param keys: (selected_num, hidden_dim)
@@ -205,12 +208,12 @@ class DIONEMA(nn.Module):
         # gather keys before updating queue
         keys = keys.detach().clone().cpu()
         gathered_list = self.gather_together(keys)
-        keys = torch.cat(gathered_list, dim=0).cuda()
+        keys = torch.cat(gathered_list, dim=0).to(device)
         batch_size = keys.shape[0]
 
         ptr = int(self.queue_ptr[idx])
+        queue = torch.cat([self.queue[idx], keys], dim=0)
 
-        queue = torch.cat((self.queue[idx], keys.cpu()), dim=0)
         if queue.shape[0] >= self.queue_size:
             self.queue[idx] = queue[-self.queue_size:, :]
             ptr = self.queue_size
@@ -263,16 +266,15 @@ class DIONEMA(nn.Module):
             self._init_memory_bank(z1_1)
 
         # update queue
-        self._update_queue(z1_1, norm_z1_1)
+        quantized_centroid = self._update_queue(z1_1, norm_z1_1) # TODO check centroid or raw data
         # TODO check if it normalize,
         # TODO cur_status: compare with normalize but update with nonnormalized
 
-        # for i in range(self.n_cluster):
-        #     print(len(self.queue[i]), f"-> {len(self.queue[i]) - self.num_support}")
 
         # update centroid
-        outputs["info_nce"] = self.info_nce(self.queue, self.centroid)
-        # cross loss
+        outputs["info-nce"] = self.info_nce(self.queue, self.centroid.weight)
+
+        # cross loss # TODO cross loss
 
         # ---- stego-loss ---- #
         # if self.training:
@@ -297,6 +299,9 @@ class DIONEMA(nn.Module):
         # outputs["mse-loss"] = (loss1 + loss2).mean()
 
         # ---- reshape ---- #
-        out = self._reshape(norm_z1_1)
+        # out = self._reshape(norm_z1_1)
+        # out = self._reshape(quantized_centroid)
+        out = self._reshape(z1_1)
+        # out = self._reshape(z1_2)
 
         return out, [z1_1, z1_2], outputs

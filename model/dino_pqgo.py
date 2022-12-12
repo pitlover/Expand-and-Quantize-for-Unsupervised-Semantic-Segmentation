@@ -6,9 +6,6 @@ import torch.nn.functional as F
 import random
 
 from model.dino import DinoFeaturizer
-# TODO kmeans sampling
-# from model.blocks.resnet_linear import EncResBlock, DecResBlock
-from model.blocks.module import EncResBlock, DecResBlock
 
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
@@ -679,8 +676,8 @@ class Codebook(nn.Module):
         distance_prob = distance_prob.view(b, h, w, -1).contiguous()
         pos_distance_prob = pos_distance_prob.view(b, h, w, -1).contiguous()
         output["vq-loss"] = q_loss
-        if self.training:
-            output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
+        # if self.training:
+        #     output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
 
         return z_q, output, distance_prob
 

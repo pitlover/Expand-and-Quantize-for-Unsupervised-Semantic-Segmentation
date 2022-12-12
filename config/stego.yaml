@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_70_base_bs16"
+  name: "STEGO_70_base_reproduced"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -10,10 +10,10 @@ wandb:
 # ---------------------------------------------------------------- #
 seed: 10
 num_classes: 27
-dataset_name: "cocostuff27"
-data_dir: "../Datasets/cocostuff"
+dataset_name: "cityscape"
+data_dir: "../Datasets/cityscape"
 is_visualize: false                           # default false, true
-visualize_path: "./visualize/stego+pq"
+visualize_path: "./visualize/"
 # ---------------------------------------------------------------- #
 resume:
   checkpoint: null
@@ -42,12 +42,20 @@ loss:
 
   # cocostuff27 with vit-base
 #  neg_inter_weight: 0.1538476246415498
-  neg_inter_weight: 0.15
-  pos_inter_weight: 1
-  pos_intra_weight: 0.1
-  neg_inter_shift: 1
-  pos_inter_shift: 0.2
-  pos_intra_shift: 0.12
+#  neg_inter_weight: 0.15
+#  pos_inter_weight: 1
+#  pos_intra_weight: 0.1
+#  neg_inter_shift: 1
+#  pos_inter_shift: 0.2
+#  pos_intra_shift: 0.12
+
+  # cityscape with vit-base
+  neg_inter_weight: 0.91
+  pos_inter_weight: 0.58
+  pos_intra_weight: 1.00
+  neg_inter_shift: 0.31
+  pos_inter_shift: 0.18
+  pos_intra_shift: 0.46
 
   zero_clamp: true
   pointwise: true

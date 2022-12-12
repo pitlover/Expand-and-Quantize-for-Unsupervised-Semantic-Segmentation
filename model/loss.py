@@ -220,19 +220,6 @@ class ProxyLoss(nn.Module):
         self.num_queries = num_queries
         self.num_neg = num_neg
 
-    def _normalize(self, x):
-        if self.normalize == "l2":
-            x_norm = F.normalize(x, dim=-1)
-        elif self.normalize == "z_norm":  # z-normalize
-            x_std, x_mean = torch.std_mean(x, dim=1, keepdim=True)  # (n, 1)
-            x_norm = (x - x_mean) / (x_std + 1e-5)
-        elif self.normalize == "none":
-            x_norm = x
-        else:
-            raise ValueError(f"Unsupported normalize type {self.normalize}")
-
-        return x_norm
-
     def forward(self, queue: torch.Tensor, centroids: torch.Tensor) -> torch.Tensor:
         '''
 
@@ -241,34 +228,41 @@ class ProxyLoss(nn.Module):
         :return:
         '''
         n_cluster = len(queue)
-        loss = torch.tensor(0, device=centroids.weight.device)
+        loss = torch.tensor(0, device=centroids.device)
 
         for i in range(n_cluster):
             # select anchor pixel
             rand_idx = torch.randint(queue[i].shape[0], size=(self.num_queries,))
-            anchor_feat = (queue[i][rand_idx].clone().cuda())
+            query_idx = (queue[i][rand_idx].clone().cuda())
 
-            with torch.no_grad():
-                centroid = (centroids[i].weight.unsqueeze(0).unsqueeze(0).repeat(self.num_queries, 1,
-                                                                          1))  # (num_queries, 1, hidden_dim)
-                neg_feat = torch.concat((queue[:i], queue[i + 1:]), dim=0)
-                print(neg_feat.shape)
-                exit()
+            # with torch.no_grad():
+            centroid = (centroids[i].unsqueeze(0).unsqueeze(0).repeat(self.num_queries, 1,
+                                                                      1))  # (num_queries, 1, hidden_dim)
 
-                all_feat = torch.cat((centroid, neg_feat), dim=1)  # (num_queires, 1+ neg, hidden_dim)
+            _i, i_ = queue[:i], queue[i + 1:]
+            if len(_i) > 0:
+                cat_i = torch.cat([_ for _ in _i], dim=0)
+            else:
+                cat_i = torch.tensor([], device=centroid.device)
 
-            logits = torch.cosine_similarity(anchor_feat.unsqueeze(1), all_feat, dim=2)
+            if len(i_) > 0:
+                cat_i_ = torch.cat([_ for _ in i_], dim=0)
+            else:
+                cat_i_ = torch.tensor([], device=centroid.device)
 
+            # TODO randomly choose neg vs uniformly choose neg per class
+            neg_feat = torch.concat([cat_i, cat_i_], dim=0) # (all_negatives, hidden_dim)
+            # randint
+            neg_idx = torch.randint(neg_feat.shape[0], size=(self.num_queries * self.num_neg,),
+                                    device=centroid.device)
+            neg_feat = neg_feat[neg_idx].reshape(self.num_queries, self.num_neg, -1)
+            all_feat = torch.cat((centroid, neg_feat), dim=1)  # (num_queries, 1+ neg, hidden_dim)
+
+            logits = torch.cosine_similarity(query_idx.unsqueeze(1), all_feat, dim=2)
             loss = loss + F.cross_entropy(logits / self.temperature,
-                                          torch.zeros(self.num_queries, device=centroids.weight.device).long())
+                                          torch.zeros(self.num_queries, device=centroids.device).long())
 
-        if self.reduction == "sum":
-            loss = torch.sum(loss)
-        elif self.reduction == "mean":
-            loss = torch.mean(loss)
-
-        return loss
-
+        return loss / n_cluster
 
 class ClusterLoss(nn.Module):
     def __init__(self,

@@ -96,6 +96,7 @@ def train_epoch(
             step_time = time.time() - step_start_time
 
             current_iter += 1
+
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
                 with torch.cuda.amp.autocast(enabled=True):

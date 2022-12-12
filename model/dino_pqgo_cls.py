@@ -82,7 +82,10 @@ class DINOPQGOCLS(nn.Module):
         self.vq_blocks = nn.ModuleList(vq_blocks)
 
         # -------- classifier -------- #
-        self.classifier = torch.nn.Linear(vq_embed_dims[0], self.num_pq[0] * vq_num_codebooks[0])
+        self.classifier = torch.nn.Conv1d(in_channels=vq_embed_dims[0],
+                                          out_channels=vq_num_codebooks[0] * self.num_pq[0],
+                                          groups=self.num_pq[0],
+                                          kernel_size=1)
 
         # -------- loss -------- #
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
@@ -110,6 +113,17 @@ class DINOPQGOCLS(nn.Module):
         norm_x = F.normalize(x, dim=-1)
 
         return norm_x
+
+    def _reshape(self, x):
+        '''
+
+        :param x:  (bhw, d)
+        :return:  (b, d, h, w)
+        '''
+        x = x.view(-1, self.h, self.w, self.d)
+        reshape_x = x.permute(0, 3, 1, 2).contiguous()
+
+        return reshape_x
 
     @torch.no_grad()
     def _momentum_update_ema_head(self):
@@ -142,7 +156,7 @@ class DINOPQGOCLS(nn.Module):
             code_pos = None  # placeholder
 
         # ---- trainable(ori) vs ema(aug) ---- #
-        z1_1 = self.trainable_head(dino_feat) # (b, d, h, w)
+        z1_1 = self.trainable_head(dino_feat)  # (b, d, h, w)
         self.b, self.d, self.h, self.w = z1_1.shape
         norm_z1_1 = self._normalize(z1_1)
 
@@ -155,7 +169,6 @@ class DINOPQGOCLS(nn.Module):
         outputs["mse-loss"] = loss1
 
         quantized_feat, outputs, distance_prob, pseudo_labels = self.vq_blocks[0](z1_2)  # (2b, hidden_dim, h, w)
-        # recon = self.dec_proj(quantized_feat)
 
         # TODO vq part
         if self.training:
@@ -163,10 +176,13 @@ class DINOPQGOCLS(nn.Module):
             outputs["stego-loss"] = self.stego_loss(dino_feat, dino_feat_pos, z1_1, code_pos)
 
         # classifier
-        total_logits = self.classifier(self._flatten(z1_1)) # (bhw, 16384)
-        print(total_logits.shape)
-        print(len(pseudo_labels))
-        exit()
+        flat_z1_1 = self._flatten(z1_1).unsqueeze(-1)  # (bhw, hidden_dim, 1)
+        total_logits = self.classifier(flat_z1_1)  # (bhw, 256*64, 1)
+        total_logits = total_logits.view(-1, self.num_pq[0], self.vq_num_codebooks)  # (bhw, 64, 256)
+        # pseudo_labels # (64, bhw)
+        pseudo_labels = torch.stack(pseudo_labels, dim=1).long()  # (bhw, 64)
+        outputs["cls-loss"] = F.cross_entropy(total_logits.view(-1, self.vq_num_codebooks), pseudo_labels.view(-1),
+                                              reduction="mean")
         out = self._reshape(z1_1)
 
         return out, quantized_feat, outputs

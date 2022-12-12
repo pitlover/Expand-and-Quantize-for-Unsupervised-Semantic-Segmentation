@@ -3,12 +3,11 @@ import wget
 from os.path import join
 
 
-# @hydra.main(config_path="configs", config_name="eval_config.yml")
 def my_app() -> None:
     pytorch_data_dir = "../Datasets/"
     dataset_names = [
-        "potsdam"]
-        # "cityscapes"]
+        # "potsdam"]
+        "cityscapes"]
     # "cocostuff"]
     # "potsdamraw"]
     url_base = "https://marhamilresearch4.blob.core.windows.net/stego-public/pytorch_data/"

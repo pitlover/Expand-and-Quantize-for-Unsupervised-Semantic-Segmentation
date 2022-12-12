@@ -2,16 +2,16 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_70_base_reproduced"
+  name: "STEGO_potsdam_small_reproduced"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
 
 # ---------------------------------------------------------------- #
 seed: 10
-num_classes: 27
-dataset_name: "cityscape"
-data_dir: "../Datasets/cityscape"
+num_classes: 3                              # TODO need to fix per dataset
+dataset_name: "potsdam"                     # "potsdam", "cityscape", "cocostuff27"
+data_dir: "../Datasets/potsdam"
 is_visualize: false                           # default false, true
 visualize_path: "./visualize/"
 # ---------------------------------------------------------------- #
@@ -20,7 +20,7 @@ resume:
 # ---------------------------------------------------------------- #
 model:
   pretrained:
-    model_type: "vit_base"
+    model_type: "vit_small"
     dino_patch_size: 8
     freeze_backbone: true
     drop_prob: 0.1
@@ -50,12 +50,20 @@ loss:
 #  pos_intra_shift: 0.12
 
   # cityscape with vit-base
-  neg_inter_weight: 0.91
-  pos_inter_weight: 0.58
-  pos_intra_weight: 1.00
-  neg_inter_shift: 0.31
-  pos_inter_shift: 0.18
-  pos_intra_shift: 0.46
+#  neg_inter_weight: 0.91
+#  pos_inter_weight: 0.58
+#  pos_intra_weight: 1.00
+#  neg_inter_shift: 0.31
+#  pos_inter_shift: 0.18
+#  pos_intra_shift: 0.46
+
+  # potsdam with vit-small
+  neg_inter_weight: 0.63
+  pos_inter_weight: 0.25
+  pos_intra_weight: 0.67
+  neg_inter_shift: 0.46
+  pos_inter_shift: 0.02
+  pos_intra_shift: 0.08
 
   zero_clamp: true
   pointwise: true
@@ -84,11 +92,12 @@ dataset:
 
 dataloader:
   train:
-    batch_size: 16  # total
+    batch_size: 32  # total
     num_workers: 8  # total
   val:
     batch_size: 16  # total
     num_workers: 8  # total
+    is_visualize: ${is_visualize}
 
 # ---------------------------------------------------------------- #
 optimizer:
@@ -118,7 +127,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 1
+  max_epochs: 10
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 10.0

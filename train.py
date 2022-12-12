@@ -97,6 +97,10 @@ def train_epoch(
 
             current_iter += 1
 
+            # for n, p in model.named_parameters():
+            #     if p.grad is None:
+            #         print(f'{n} has no grad')
+
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
                 with torch.cuda.amp.autocast(enabled=True):
@@ -105,6 +109,7 @@ def train_epoch(
                 loss = total_loss / num_accum
                 # loss.backward()
                 scaler.scale(loss).backward()
+
         else:  # non-update step
             # and not DDP
             with torch.cuda.amp.autocast(enabled=True):
@@ -404,6 +409,7 @@ def run(cfg: Dict, debug: bool = False) -> None:
                                                                        current_iter, best_metric, best_epoch, best_iter,
                                                                        scaler)
         epoch_time = time.time() - epoch_start_time
+
         if is_master():
             s = time_log()
             s += f"End train epoch {current_epoch} / {max_epochs}\n"

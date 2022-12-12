@@ -1,7 +1,7 @@
 import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.utilities.seed import seed_everything
-from torchvision.transforms.functional import five_crop, _get_image_size, crop
+from torchvision.transforms.functional import five_crop, crop
 import torchvision.transforms as T  # noqa
 
 import os
@@ -17,7 +17,6 @@ from torch.utils.data import Dataset
 from torchvision.datasets.cityscapes import Cityscapes
 from torchvision.transforms.functional import to_pil_image
 from tqdm import tqdm
-
 
 
 def _random_crops(img, size, seed, n):
@@ -47,7 +46,7 @@ def _random_crops(img, size, seed, n):
     if len(size) != 2:
         raise ValueError("Please provide only two dimensions (h, w) for size.")
 
-    image_width, image_height = _get_image_size(img)
+    image_width, image_height = torchvision.transforms.functional_get_image_size(img)
     crop_height, crop_width = size
     if crop_width > image_width or crop_height > image_height:
         msg = "Requested crop size {} is bigger than input size {}"
@@ -87,17 +86,16 @@ class RandomCropComputer(Dataset):
     def five_crops(self, i, img):
         return five_crop(img, self._get_size(img))
 
-    def __init__(self, cfg, dataset_name, img_set, crop_type, crop_ratio):
-        self.pytorch_data_dir = cfg.pytorch_data_dir
+    def __init__(self, dataset_name, img_set, crop_type, crop_ratio):
+        self.pytorch_data_dir = f"../Datasets/"
         self.crop_ratio = crop_ratio
-        self.save_dir = join(
-            cfg.pytorch_data_dir, "cropped", "{}_{}_crop_{}".format(dataset_name, crop_type, crop_ratio))
+        self.save_dir = join("cropped", "{}_{}_crop_{}".format(dataset_name, crop_type, crop_ratio))
         self.img_set = img_set
         self.dataset_name = dataset_name
-        self.cfg = cfg
 
         self.img_dir = join(self.save_dir, "img", img_set)
         self.label_dir = join(self.save_dir, "label", img_set)
+
         os.makedirs(self.img_dir, exist_ok=True)
         os.makedirs(self.label_dir, exist_ok=True)
 
@@ -109,14 +107,13 @@ class RandomCropComputer(Dataset):
             raise ValueError('Unknown crop type {}'.format(crop_type))
 
         self.dataset = ContrastiveSegDataset(
-            cfg.pytorch_data_dir,
+            self.pytorch_data_dir,
             dataset_name,
             None,
             img_set,
             T.ToTensor(),
             ToTargetTensor(),
-            cfg=cfg,
-            num_neighbors=cfg.num_neighbors,
+            num_neighbors=7,
             pos_labels=False,
             pos_images=False,
             mask=False,
@@ -141,9 +138,7 @@ class RandomCropComputer(Dataset):
         return len(self.dataset)
 
 
-def my_app(cfg: DictConfig) -> None:
-    seed_everything(seed=0, workers=True)
-
+def my_app() -> None:
     dataset_names = ["potsdam"]
     # dataset_names = ["cityscapes", "potsdam"]
     img_sets = ["train", "val"]
@@ -154,7 +149,7 @@ def my_app(cfg: DictConfig) -> None:
         for crop_type in crop_types:
             for dataset_name in dataset_names:
                 for img_set in img_sets:
-                    dataset = RandomCropComputer(cfg, dataset_name, img_set, crop_type, crop_ratio)
+                    dataset = RandomCropComputer(dataset_name, img_set, crop_type, crop_ratio)
                     loader = DataLoader(dataset, 1, shuffle=False, num_workers=4, collate_fn=lambda l: l)
                     for _ in tqdm(loader):
                         pass
@@ -168,7 +163,6 @@ class ContrastiveSegDataset(Dataset):
                  image_set,
                  transform,
                  target_transform,
-                 cfg,
                  aug_geometric_transform=None,
                  aug_photometric_transform=None,
                  num_neighbors=5,
@@ -203,7 +197,7 @@ class ContrastiveSegDataset(Dataset):
         elif dataset_name == "cityscapes" and crop_type is not None:
             self.n_classes = 27
             dataset_class = CroppedDataset
-            extra_args = dict(dataset_name="cityscapes", crop_type=crop_type, crop_ratio=cfg.crop_ratio)
+            extra_args = dict(dataset_name="cityscapes", crop_type=crop_type, crop_ratio=.5)
         else:
             raise ValueError("Unknown dataset: {}".format(dataset_name))
 
@@ -216,21 +210,6 @@ class ContrastiveSegDataset(Dataset):
             transform=transform,
             target_transform=target_transform, **extra_args)
 
-        if model_type_override is not None:
-            model_type = model_type_override
-        else:
-            model_type = cfg.model_type
-
-        nice_dataset_name = cfg.dir_dataset_name if dataset_name == "directory" else dataset_name
-        feature_cache_file = join(pytorch_data_dir, "nns", "nns_{}_{}_{}_{}_{}.npz".format(
-            model_type, nice_dataset_name, image_set, crop_type, cfg.res))
-        if pos_labels or pos_images:
-            if not os.path.exists(feature_cache_file) or compute_knns:
-                raise ValueError("could not find nn file {} please run precompute_knns".format(feature_cache_file))
-            else:
-                loaded = np.load(feature_cache_file)
-                self.nns = loaded["nns"]
-            assert len(self.dataset) == self.nns.shape[0]
 
     def __len__(self):
         return len(self.dataset)
@@ -241,10 +220,6 @@ class ContrastiveSegDataset(Dataset):
 
     def __getitem__(self, ind):
         pack = self.dataset[ind]
-
-        if self.pos_images or self.pos_labels:
-            ind_pos = self.nns[ind][torch.randint(low=1, high=self.num_neighbors + 1, size=[]).item()]
-            pack_pos = self.dataset[ind_pos]
 
         seed = np.random.randint(2147483647)  # make a seed with numpy generator
 
@@ -263,26 +238,6 @@ class ContrastiveSegDataset(Dataset):
             "img": extra_trans(ind, pack[0]),
             "label": extra_trans(ind, pack[1]),
         }
-
-        if self.pos_images:
-            ret["img_pos"] = extra_trans(ind, pack_pos[0])
-            ret["ind_pos"] = ind_pos
-
-        if self.mask:
-            ret["mask"] = pack[2]
-
-        if self.pos_labels:
-            ret["label_pos"] = extra_trans(ind, pack_pos[1])
-            ret["mask_pos"] = pack_pos[2]
-
-        if self.aug_photometric_transform is not None:
-            img_aug = self.aug_photometric_transform(self.aug_geometric_transform(pack[0]))
-
-            self._set_seed(seed)
-            coord_aug = self.aug_geometric_transform(coord)
-
-            ret["img_aug"] = img_aug
-            ret["coord_aug"] = coord_aug.permute(1, 2, 0)
 
         return ret
 

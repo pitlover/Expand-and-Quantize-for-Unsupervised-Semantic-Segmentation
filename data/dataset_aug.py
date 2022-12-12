@@ -9,7 +9,8 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.datasets.cityscapes import Cityscapes
 from torchvision.transforms.transforms import InterpolationMode
-
+from torchvision.transforms.functional import to_pil_image
+from scipy.io import loadmat
 from .dataset_utils import coco_to_sparse, ToTargetTensor
 
 __all__ = ["UnSegDataset"]
@@ -141,6 +142,75 @@ class CocoSeg(Dataset):
             else:
                 return img, img_aug, coarse_label, (coarse_label >= 0), image_path
 
+
+class Potsdam(Dataset):
+    def __init__(self,
+                 data_dir,
+                 mode,
+                 transform,
+                 target_transform,
+                 coarse_labels,
+                 aug_transform):
+        super(Potsdam, self).__init__()
+
+        self.split = mode
+        self.root = data_dir
+        self.transform = transform
+        self.target_transform = target_transform
+        self.aug_transform = aug_transform
+        split_files = {
+            "train": ["labelled_train.txt"],
+            "unlabelled_train": ["unlabelled_train.txt"],
+            "val": ["labelled_test.txt"],
+            "train+val": ["labelled_train.txt", "labelled_test.txt"],
+            "all": ["all.txt"]
+        }
+        assert self.split in split_files.keys()
+
+        self.files = []
+        for split_file in split_files[self.split]:
+            with open(join(self.root, split_file), "r") as f:
+                self.files.extend(fn.rstrip() for fn in f.readlines())
+
+        self.coarse_labels = coarse_labels
+        self.fine_to_coarse = {0: 0, 4: 0,  # roads and cars
+                               1: 1, 5: 1,  # buildings and clutter
+                               2: 2, 3: 2,  # vegetation and trees
+                               255: -1
+                               }
+
+    def __getitem__(self, index):
+        image_id = self.files[index]
+        img_ = loadmat(join(self.root, "imgs", image_id + ".mat"))["img"]
+        img_ = to_pil_image(torch.from_numpy(img_).permute(2, 0, 1)[:3])  # TODO add ir channel back
+        try:
+            label = loadmat(join(self.root, "gt", image_id + ".mat"))["gt"]
+            label = to_pil_image(torch.from_numpy(label).unsqueeze(-1).permute(2, 0, 1))
+        except FileNotFoundError:
+            label = to_pil_image(torch.ones(1, img_.height, img_.width))
+
+        seed = np.random.randint(2147483647)
+        random.seed(seed)
+        torch.manual_seed(seed)
+        img = self.transform(img_)
+
+        random.seed(seed)
+        torch.manual_seed(seed)
+        label = self.target_transform(label).squeeze(0)
+
+        if self.coarse_labels:
+            new_label_map = torch.zeros_like(label)
+            for fine, coarse in self.fine_to_coarse.items():
+                new_label_map[label == fine] = coarse
+            label = new_label_map
+
+        img_aug = self.aug_transform(img_)
+
+        mask = (label > 0).to(torch.float32)
+        return img, img_aug, label, mask, image_id
+
+    def __len__(self):
+        return len(self.files)
 
 class CityscapesSeg(Dataset):
     def __init__(self,
@@ -276,7 +346,11 @@ class UnSegDataset(Dataset):
         self.pos_images = pos_images
         self.num_neighbors = num_neighbors
 
-        if dataset_name == "cityscapes" and crop_type is None:
+        if dataset_name == "potsdam":
+            self.n_classes = 3
+            dataset_class = Potsdam
+            extra_args = dict(coarse_labels=True)
+        elif dataset_name == "cityscapes" and crop_type is None:
             self.n_classes = 27
             dataset_class = CityscapesSeg
             extra_args = dict()
@@ -340,8 +414,8 @@ class UnSegDataset(Dataset):
             **extra_args
         )
 
-        feature_cache_file = join("../Datasets/cocostuff", "nns",
-                                  f"nns_{model_type}_cocostuff27_{mode}_{crop_type}_224.npz")
+        feature_cache_file = join(f"../Datasets/{dataset_name}", "nns",
+                                  f"nns_{model_type}_{dataset_name}_{mode}_{crop_type}_224.npz")
 
         if self.pos_labels or self.pos_images:
             if not os.path.exists(feature_cache_file):

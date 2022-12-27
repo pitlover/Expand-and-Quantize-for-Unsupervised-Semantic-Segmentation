@@ -139,8 +139,8 @@ class RandomCropComputer(Dataset):
 
 
 def my_app() -> None:
-    dataset_names = ["potsdam"]
-    # dataset_names = ["cityscapes", "potsdam"]
+    # dataset_names = ["potsdam"]
+    dataset_names = ["cityscapes"]
     img_sets = ["train", "val"]
     crop_types = ["five"]
     crop_ratios = [.5]

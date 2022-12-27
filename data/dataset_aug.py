@@ -212,12 +212,14 @@ class Potsdam(Dataset):
     def __len__(self):
         return len(self.files)
 
+
 class CityscapesSeg(Dataset):
     def __init__(self,
-                 mode: str,
                  data_dir: str,
+                 mode: str,
                  transform=None,
                  target_transform=None,
+                 aug_transform=None,
                  ):
         super().__init__()
 
@@ -239,6 +241,7 @@ class CityscapesSeg(Dataset):
 
         self.transform = transform
         self.target_transform = target_transform
+        self.aug_transform = aug_transform
         self.first_non_void = 7
 
     def __len__(self) -> int:
@@ -252,20 +255,21 @@ class CityscapesSeg(Dataset):
                             label_mask (h, w): BoolTensor (T: valid, F: invalid)
                             image_path: str
         """
-        image, target = self.inner_dataset[index]
+        image_, target = self.inner_dataset[index]
         image_path = self.inner_dataset.images[index]
 
         if self.transform is not None:
-            image = self.transform(image)
+            image = self.transform(image_)
+            img_aug = self.aug_transform(image_)
             target = self.target_transform(target).squeeze(0)
 
             target = (target - self.first_non_void)
             target[target < 0] = -1
             mask = (target == -1)  # TODO is this valid or non-valid??
-            return image, target, mask, image_path
+            return image, img_aug, target, mask, image_path
         else:
             mask = torch.zeros_like(target, dtype=torch.bool)  # TODO filled with False
-            return image, target, mask, image_path
+            return image_, None, target, mask, image_path
 
 
 class CroppedDataset(Dataset):
@@ -329,7 +333,7 @@ class UnSegDataset(Dataset):
                  mode: str,  # train, val
                  data_dir: str,
                  dataset_name: str,
-                 model_type : str, # vit_small, vit_base
+                 model_type: str,  # vit_small, vit_base
                  crop_type: Optional[str],  # 5-crop
                  crop_ratio: float = 0.5,
                  loader_crop_type: str = "center",  # center, random
@@ -367,7 +371,8 @@ class UnSegDataset(Dataset):
             dataset_class = CocoSeg
             extra_args = dict(coarse_labels=False, subset=7, exclude_things=True)
         elif dataset_name == "cocostuff27" and crop_type is not None:
-            # common training
+            # common training00
+
             self.n_classes = 27
             dataset_class = CroppedDataset
             extra_args = dict(dataset_name="cocostuff27", crop_type=crop_type, crop_ratio=crop_ratio)

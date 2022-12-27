@@ -152,8 +152,8 @@ def train_epoch(
                 model, valid_dataloader, cfg, device, current_iter, is_crf=False)
 
             if is_master():
-                if best_metric["Cluster_Accuracy"] <= cluster_result["accuracy"].item():
-                # if best_metric["Cluster_mIoU"] <= cluster_result["iou"].item():
+                # if best_metric["Cluster_Accuracy"] <= cluster_result["accuracy"].item():
+                if best_metric["Cluster_mIoU"] <= cluster_result["iou"].item():
                     s = time_log()
                     s += f"Valid updated!\n"
                     s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"

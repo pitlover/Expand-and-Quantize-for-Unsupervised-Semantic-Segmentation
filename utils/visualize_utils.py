@@ -1,10 +1,11 @@
+from typing import List
 import torch
 import torch.nn.functional as F
 import numpy as np
 import os
 from collections import defaultdict
 from os.path import join
-from data.dataset_utils import create_cityscapes_colormap, create_pascal_label_colormap
+from data.dataset_utils import create_cityscapes_colormap, create_pascal_label_colormap, create_pq_colormap
 from PIL import Image
 
 
@@ -59,3 +60,32 @@ def visualization(save_dir: str, dataset_type: str, saved_data: defaultdict, clu
 
         plot_linear = label_cmap[saved_data["linear_preds"][index]].astype(np.uint8)
         Image.fromarray(plot_linear).save(join(join(save_dir, "linear", file_name + ".png")))
+
+
+def pq_visualization(save_dir: str, saved_data: defaultdict, img_path: List[str]):
+    '''
+
+    :param save_dir:
+    :param dataset_type:
+    :param saved_data: (num_pq, b, h, w)
+    :param img_path:
+    :return:
+    '''
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    label_cmap = create_pq_colormap()
+
+    num_pq, bs, h, w = saved_data.shape # (16, 8, 40, 40)
+
+    for pq_i in range(num_pq):
+        # data : (b, h, w)
+        data = F.interpolate(saved_data[pq_i].unsqueeze(1).float(), size=[h * 8, w * 8], mode="nearest").squeeze(
+            1).to(dtype=torch.int32)  # (b, h, w) -> (b, 8h, 8w)
+        for index in range(bs):
+            file_name = img_path[index].split("/")[-1].split(".")[0]
+            file_name = str(f"{file_name}_{pq_i}")  # cocostuff
+            # file_name = str(f"{img_path[index]}_{pq_i}").split("/")[-1].split(".")[0] # Potsdasm
+            plot_linear = label_cmap[data[index].cpu()].astype(np.uint8)
+            Image.fromarray(plot_linear).save(join(join(save_dir, file_name + ".png")))
+

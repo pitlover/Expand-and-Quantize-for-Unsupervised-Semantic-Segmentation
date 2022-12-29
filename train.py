@@ -16,7 +16,7 @@ from utils.dist_utils import set_dist, is_distributed_set, is_master, barrier, g
 from utils.dist_utils import all_reduce_dict
 from utils.print_utils import time_log
 from utils.param_utils import count_params, compute_param_norm
-from utils.visualize_utils import visualization
+from utils.visualize_utils import visualization, pq_visualization
 
 from build import build_dataset, build_dataloader, build_model, build_optimizer, build_scheduler, \
     split_params_for_optimizer
@@ -67,7 +67,9 @@ def train_epoch(
         img = data["img"].to(device, non_blocking=True)
         aug_img = data["aug_img"].to(device, non_blocking=True)
         img_pos = data["img_pos"].to(device, non_blocking=True)
+        img_path = data["img_path"]
         label = data["label"].to(device, non_blocking=True)
+
         data_time = time.time() - data_start_time
         # -------------------------------- loss -------------------------------- #
         if it % num_accum == 0:
@@ -77,8 +79,9 @@ def train_epoch(
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img=img, aug_img=aug_img, label=label, img_pos=img_pos,
-                                              it=it)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _, _ = model(img=img, aug_img=aug_img, label=label, img_pos=img_pos,
+                                                 img_path=img_path,
+                                                 it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
@@ -104,8 +107,8 @@ def train_epoch(
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
                 with torch.cuda.amp.autocast(enabled=True):
-                    total_loss, output, _ = model(img=img, aug_img=aug_img, img_pos=img_pos, label=label
-                                                  )  # total_loss, output, (linear_preds, cluster_preds)
+                    total_loss, output, _, _ = model(img=img, aug_img=aug_img, img_pos=img_pos, label=label
+                                                     )  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
                 # loss.backward()
                 scaler.scale(loss).backward()
@@ -113,8 +116,8 @@ def train_epoch(
         else:  # non-update step
             # and not DDP
             with torch.cuda.amp.autocast(enabled=True):
-                total_loss, output, _ = model(img=img, aug_img=aug_img, img_pos=img_pos,
-                                              label=label)  # total_loss, output, (linear_preds, cluster_preds)
+                total_loss, output, _, _ = model(img=img, aug_img=aug_img, img_pos=img_pos,
+                                                 label=label)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
             # loss.backward()
@@ -202,7 +205,7 @@ def valid_epoch(
         cfg: Dict,
         device: torch.device,
         current_iter: int,
-        is_crf: bool = False,
+        is_crf: bool = False
 ) -> Tuple[Dict, Dict, Dict]:
     # model_m = model.module if isinstance(model, DistributedDataParallel) else model
     # model_m: DINOUnSegWrapper
@@ -236,8 +239,8 @@ def valid_epoch(
         img_path = data["img_path"]
         # -------------------------------- loss -------------------------------- #
         with torch.cuda.amp.autocast(enabled=True):
-            _, output, (linear_preds, cluster_preds) = model(img=img, aug_img=aug_img, label=label,
-                                                             is_crf=is_crf)
+            _, output, (linear_preds, cluster_preds), z_quantized_index = model(img=img, aug_img=aug_img, label=label,
+                                                                                is_crf=is_crf)
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
 
@@ -248,13 +251,19 @@ def valid_epoch(
                 result[k] += v
         count += 1
 
-        # if cfg["is_visualize"] and is_crf:
-        if cfg["is_visualize"] and (current_iter % 2500 == 1):
+        if cfg["is_visualize"] and is_crf:
             os.makedirs(cfg["visualize_path"], exist_ok=True)
             saved_data["img_path"].append("".join(img_path))
             saved_data["cluster_preds"].append(cluster_preds.cpu().squeeze(0))
             saved_data["linear_preds"].append(linear_preds.cpu().squeeze(0))
             saved_data["label"].append(label.cpu().squeeze(0))
+
+        # if is_crf:
+        #     dataset_name = cfg["dataset_name"]
+        #     pq_visualization(save_dir=f"./visualize/pq/{dataset_name}/man-2/{it}",
+        #                      saved_data=z_quantized_index,
+        #                      img_path=img_path
+        #                      )
 
     barrier()
     cluster_result = cluster_m.compute()  # {iou, accuracy}

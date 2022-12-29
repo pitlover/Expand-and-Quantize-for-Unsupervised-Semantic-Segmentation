@@ -5,16 +5,16 @@ import torch.nn.functional as F  # noqa
 
 from utils.crf_utils import batched_crf
 
-__all__ = ["UnSegEvaluator"]
+__all__ = ["SubEvaluator"]
 
 
-class UnSegEvaluator(nn.Module):
+class SubEvaluator(nn.Module):
 
     def __init__(self,
                  embed_dim: int,
                  num_classes: int,
                  extra_classes: int = 0,
-                 num_pq: int = 1
+                 num_pq : int = 1
                  ) -> None:
         super().__init__()
         self.num_classes = num_classes
@@ -23,6 +23,15 @@ class UnSegEvaluator(nn.Module):
         self.cluster_probe = ClusterLookup(embed_dim, num_classes + extra_classes)
 
         self.linear_loss = nn.CrossEntropyLoss()
+
+        dict_num = {}
+
+        for idx in range(num_pq):
+            dict_num[f"sub_cluster_{idx}"] = ClusterLookup(embed_dim // num_pq, num_classes + extra_classes)
+
+        for key, value in dict_num.items():
+            setattr(self, key, value)
+
 
     def forward_linear(self, feat: torch.Tensor, label: torch.Tensor) -> torch.Tensor:  # TODO why not use?
         """

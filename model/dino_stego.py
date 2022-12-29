@@ -33,7 +33,7 @@ class DINOStego(nn.Module):
             torch.nn.ReLU(),
             torch.nn.Conv2d(in_channels, self.dim, (1, 1)))
 
-    def forward(self, img: torch.Tensor, pos_img: torch.Tensor
+    def forward(self, img: torch.Tensor, pos_img: torch.Tensor, img_path: List[str] = None
                 ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
         output = dict()
 
@@ -48,5 +48,5 @@ class DINOStego(nn.Module):
             code_pos = self.cluster1(dino_feat_pos)
             code_pos += self.cluster2(dino_feat_pos)
 
-            output["stego-loss"] = self.corr_loss(dino_feat, dino_feat_pos,  code,  code_pos)
+            output["stego-loss"] = self.corr_loss(dino_feat, dino_feat_pos, code, code_pos)
         return dino_feat, code, output

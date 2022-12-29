@@ -37,6 +37,7 @@ class StegoWrapper(nn.Module):
                 aug_img: torch.Tensor,
                 label: torch.Tensor,
                 img_pos: torch.Tensor = None,
+                img_path : str = None,
                 it : int = -1,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
@@ -56,4 +57,4 @@ class StegoWrapper(nn.Module):
 
         total_loss = model_loss + linear_loss + cluster_loss
 
-        return total_loss, output, (linear_preds, cluster_preds)
+        return total_loss, output, (linear_preds, cluster_preds), None

@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple, List, Optional, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,7 +10,7 @@ from model.dino import DinoFeaturizer
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
-from model.loss import InfoNCELoss, JSDLoss, JSDPosLoss, MarginRankingLoss, EntropyLoss, STEGOLoss
+from model.loss import JSDLoss, JSDPosLoss, EntropyLoss, STEGOLoss
 
 
 class DIONPQGO(nn.Module):
@@ -84,14 +84,6 @@ class DIONPQGO(nn.Module):
         else:
             raise ValueError(f"Unsupported vq type {self.vq_type}.")
 
-        # -------- semantic-decoder -------- #
-        # num_dec_blocks = cfg["dec_num_blocks"]
-        # dec_proj = []
-        # for i in range(num_dec_blocks):
-        #     dec_proj.append(
-        #         DecResBlock(self.hidden_dim,
-        #                     self.feat_dim if (i == num_dec_blocks - 1) else self.hidden_dim))  # TODO check
-        # self.dec_proj = nn.Sequential(*dec_proj)
         # -------- loss -------- #
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
 
@@ -109,7 +101,9 @@ class DIONPQGO(nn.Module):
                 aug_img: torch.Tensor = None,
                 img_pos: torch.Tensor = None,
                 it: int = 0, stage: int = 0
-                ) -> Tuple[torch.Tensor, List[torch.Tensor], Dict[str, torch.Tensor]]:
+                ) -> Tuple[
+        torch.Tensor, List[torch.Tensor], Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]], Dict[
+            str, torch.Tensor]]:
         # photometric aug
         # for stego...
         outputs = {}
@@ -127,16 +121,16 @@ class DIONPQGO(nn.Module):
         else:
             code_pos = None  # placeholder
 
-        quantized_feat, outputs, distance_prob = self.vq_blocks[0](code, code_pos, it=it)  # (2b, hidden_dim, h, w)
-        # recon = self.dec_proj(quantized_feat)
+        quantized_feat, (z_split, z_quantized, z_quantized_index), outputs, distance_prob = self.vq_blocks[0](code,
+                                                                                                              code_pos,
+                                                                                                              it=it)  # (2b, hidden_dim, h, w)
 
-        # TODO vq part
         if self.training:
             # TODO vq part -> need remove
             outputs["stego-loss"] = self.stego_loss(dino_feat, dino_feat_pos, code, code_pos)
-        # outputs["recon-loss"] = F.mse_loss(recon, dino_feat)
-        # return code, None, outputs
-        return code, quantized_feat, outputs
+        z_quantized_index = torch.stack(z_quantized_index, dim=0)  # (num_pq, b, h, w)
+
+        return code, quantized_feat, (z_split, z_quantized, z_quantized_index), outputs
 
 
 class EmbeddingEMA(nn.Module):
@@ -454,7 +448,7 @@ class Codebook(nn.Module):
                  pq_dropout: float = 0.0,
                  jsd_ts: float = 1.0,
                  num_query: int = 3,
-                 num_pos : int = 10
+                 num_pos: int = 10
                  ):
         super(Codebook, self).__init__()
         """
@@ -486,7 +480,7 @@ class Codebook(nn.Module):
         self.use_split = use_split
         self.need_initialized = need_initialized
         # ----- JSD ------ #
-        self.posjsd_loss = JSDPosLoss(num_query=num_query, num_pos=num_pos)
+        # self.posjsd_loss = JSDPosLoss(num_query=num_query, num_pos=num_pos)
         self.jsd_ts = jsd_ts
 
     @torch.no_grad()
@@ -668,7 +662,8 @@ class Codebook(nn.Module):
             z_q = z_norm + (z_q - z_norm).detach()
 
         # TODO kmeans sampling
-        z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()
+        z_q = z_q.view(z.shape).permute(0, 3, 1, 2).contiguous()  # (bhw, d) -> (b, d, h, w)
+        min_encoding_indices = min_encoding_indices.view(b, h, w).contiguous()  # 12544 (bhw) -> (b, h, w)
 
         z_norm = z_norm.view(z.shape).contiguous()
         z_pos_norm = z_pos_norm.view(z.shape).contiguous()
@@ -679,7 +674,8 @@ class Codebook(nn.Module):
         # if self.training:
         #     output["jsd-loss"] = self.posjsd_loss(z_norm, z_pos_norm, distance_prob, pos_distance_prob)
 
-        return z_q, output, distance_prob
+        return z_q, output, distance_prob, min_encoding_indices
+
 
 class ProductQuantizerWrapper(nn.Module):
 
@@ -718,20 +714,22 @@ class ProductQuantizerWrapper(nn.Module):
         ])
 
     def forward(self, z: torch.Tensor, z_pos: torch.Tensor = None, it: int = -1) -> Tuple[
-        torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
+        torch.Tensor, Tuple[List[torch.Tensor], List[torch.Tensor], List[int]], Dict[str, torch.Tensor], torch.Tensor]:
         # b, c, h, w = z.shape
         if not self.training:
             z_pos = torch.zeros_like(z)
         z_split = torch.chunk(z, chunks=self.num_pq, dim=1)
         z_pos_split = torch.chunk(z_pos, chunks=self.num_pq, dim=1)
         z_quantized = list()
+        z_quantized_index = list()
         outputs = dict()
         distance_prob = list()
 
         for i in range(self.num_pq):
-            q_i, output_i, prob_i = self.quantizers[i](
+            q_i, output_i, prob_i, index_i = self.quantizers[i](
                 z_split[i], z_pos_split[i])  # (2bhw, dim // n_prototypes) -> (2b, dim // n_prototypes, h, w)
             z_quantized.append(q_i)
+            z_quantized_index.append(index_i)
             if i == 0:
                 for k, v in output_i.items():
                     outputs[k] = v
@@ -740,10 +738,10 @@ class ProductQuantizerWrapper(nn.Module):
                     outputs[k] = outputs[k] + v
             distance_prob.append(prob_i)  # (2bhw, n_prototypes)
 
-        z_quantized = torch.cat(z_quantized, dim=1)
+        z_quantized_tensor = torch.cat(z_quantized, dim=1)
         for k, v in outputs.items():
             outputs[k] /= self.num_pq
 
         distance_prob = torch.cat(distance_prob, dim=-1)  # (2bhw, n_prototypes x #pq)
 
-        return z_quantized, outputs, distance_prob
+        return z_quantized_tensor, (z_split, z_quantized, z_quantized_index), outputs, distance_prob

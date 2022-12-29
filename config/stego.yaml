@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_small_cocostuff"
+  name: "STEGO_cityscapes_100"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -20,13 +20,13 @@ resume:
 # ---------------------------------------------------------------- #
 model:
   pretrained:
-    model_type: "vit_small"
+    model_type: "vit_base"
     dino_patch_size: 8
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
     dropout: true
-    dim : 70
+    dim : 100
 
 
 # ---------------------------------------------------------------- #
@@ -49,12 +49,14 @@ loss:
 #  pos_intra_shift: 0.12
 
   # cityscapes with vit-base
-  neg_inter_weight: 0.91
-  pos_inter_weight: 0.58
-  pos_intra_weight: 1.00
+  neg_inter_weight: 0.96
+  pos_inter_weight: 0.48
+  pos_intra_weight: 1.0
+
   neg_inter_shift: 0.31
-  pos_inter_shift: 0.25
-  pos_intra_shift: 0.33
+  pos_inter_shift: 0.22
+  pos_intra_shift: 0.36
+
 
   # potsdam with vit-base
 #  neg_inter_weight: 0.63
@@ -133,7 +135,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 20
+  max_epochs: 5
   print_interval_iters: 25
   valid_interval_iters: 100
   clip_grad: 10.0

@@ -260,7 +260,7 @@ def valid_epoch(
 
         # if is_crf:
         #     dataset_name = cfg["dataset_name"]
-        #     pq_visualization(save_dir=f"./visualize/pq/{dataset_name}/man-2/{it}",
+        #     pq_visualization(save_dir=f"./visualize/pq/{dataset_name}/vq/",
         #                      saved_data=z_quantized_index,
         #                      img_path=img_path
         #                      )

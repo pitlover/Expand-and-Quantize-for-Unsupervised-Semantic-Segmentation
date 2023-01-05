@@ -28,6 +28,8 @@ class DIONPQGO(nn.Module):
         # # -------- head -------- #
         self.cluster1 = self.make_clusterer(self.feat_dim)
         self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
+        # TODO grouping
+        self.grouping = nn.Conv2d(cfg["vq"]["embed_dims"][0], cfg["vq"]["embed_dims"][0], (1, 1))
 
         # # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
@@ -120,6 +122,9 @@ class DIONPQGO(nn.Module):
             code_pos += self.cluster2(dino_feat_pos)
         else:
             code_pos = None  # placeholder
+
+        # TODO grouping
+        code = self.grouping(code)
 
         quantized_feat, (z_split, z_quantized, z_quantized_index), outputs, distance_prob = self.vq_blocks[0](code,
                                                                                                               code_pos,
@@ -646,10 +651,6 @@ class Codebook(nn.Module):
                     self.prepare_restart(vq_current_count, z_norm)
                     self.restart()
 
-                # if self.use_split:
-                #     n_split = self.split(vq_current_count)  # not-used count
-                # else:
-                #     n_split = len(torch.nonzero(vq_current_count == 0, as_tuple=True)[0])
                 output["codebook-usage"] = (codebook_norm.shape[0] - len(
                     torch.nonzero(vq_current_count == 0, as_tuple=True)[0])) / codebook_norm.shape[0]  # used ratio
 

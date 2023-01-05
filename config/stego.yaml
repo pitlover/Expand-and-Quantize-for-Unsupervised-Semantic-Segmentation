@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_cityscapes_100"
+  name: "STEGO_reproduce"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -10,8 +10,8 @@ wandb:
 # ---------------------------------------------------------------- #
 seed: 10
 num_classes: 27                              # TODO need to fix per dataset
-dataset_name: "cityscapes"                     # "potsdam", "cityscapes", "cocostuff27"
-data_dir: "../Datasets/cityscapes"
+dataset_name: "cocostuff27"                     # "potsdam", "cityscapes", "cocostuff27"
+data_dir: "../Datasets/cocostuff27"
 is_visualize: false                           # default false, true
 visualize_path: "./visualize/stego_jy"
 # ---------------------------------------------------------------- #
@@ -20,13 +20,13 @@ resume:
 # ---------------------------------------------------------------- #
 model:
   pretrained:
-    model_type: "vit_base"
+    model_type: "vit_base" # "vit_small" "vit_base"
     dino_patch_size: 8
     freeze_backbone: true
     drop_prob: 0.1
     pretrained_weights: null
     dropout: true
-    dim : 100
+    dim: 1024
 
 
 # ---------------------------------------------------------------- #
@@ -41,37 +41,43 @@ loss:
 #  pos_intra_shift: 0.28
 
   # cocostuff27 with vit-base
-#  neg_inter_weight: 0.15
-#  pos_inter_weight: 1
-#  pos_intra_weight: 0.1
-#  neg_inter_shift: 1
-#  pos_inter_shift: 0.2
-#  pos_intra_shift: 0.12
+  neg_inter_weight: 0.15
+  pos_inter_weight: 1
+  pos_intra_weight: 0.1
+  neg_inter_shift: 1
+  pos_inter_shift: 0.2
+  pos_intra_shift: 0.12
+
+  # cityscapes with vit-small
+#  neg_inter_weight: 0.95
+#  pos_inter_weight: 0.43
+#  pos_intra_weight: 1.00
+#  neg_inter_shift: 0.31
+#  pos_inter_shift: 0.22
+#  pos_intra_shift: 0.36
 
   # cityscapes with vit-base
-  neg_inter_weight: 0.96
-  pos_inter_weight: 0.48
-  pos_intra_weight: 1.0
-
-  neg_inter_shift: 0.31
-  pos_inter_shift: 0.22
-  pos_intra_shift: 0.36
-
+#  neg_inter_weight: 0.95
+#  pos_inter_weight: 0.43
+#  pos_intra_weight: 1.00
+#  neg_inter_shift: 0.31
+#  pos_inter_shift: 0.22
+#  pos_intra_shift: 0.36
 
   # potsdam with vit-base
-#  neg_inter_weight: 0.63
-#  pos_inter_weight: 0.25
-#  pos_intra_weight: 0.67
-#  neg_inter_shift: 0.26
-#  pos_inter_shift: 0.12
-#  pos_intra_shift: 0.21
+  #  neg_inter_weight: 0.63
+  #  pos_inter_weight: 0.25
+  #  pos_intra_weight: 0.67
+  #  neg_inter_shift: 0.26
+  #  pos_inter_shift: 0.12
+  #  pos_intra_shift: 0.21
 
-#  neg_inter_weight: 0.63
-#  pos_inter_weight: 0.25
-#  pos_intra_weight: 0.67
-#  neg_inter_shift: 0.36
-#  pos_inter_shift: 0.12
-#  pos_intra_shift: 0.18
+  #  neg_inter_weight: 0.63
+  #  pos_inter_weight: 0.25
+  #  pos_intra_weight: 0.67
+  #  neg_inter_shift: 0.36
+  #  pos_inter_shift: 0.12
+  #  pos_intra_shift: 0.18
 
   zero_clamp: true
   pointwise: true
@@ -84,8 +90,8 @@ dataset:
   train:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    model_type : ${model.pretrained.model_type}
-    crop_type: "five"
+    model_type: ${model.pretrained.model_type}
+    crop_type: null # "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
     num_neighbors: 7
@@ -93,7 +99,7 @@ dataset:
   val:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
-    model_type : ${model.pretrained.model_type}
+    model_type: ${model.pretrained.model_type}
     crop_type: null
     loader_crop_type: "center"  # none for voc
     res: 320
@@ -135,8 +141,8 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 5
+  max_epochs: 2
   print_interval_iters: 25
-  valid_interval_iters: 100
+  valid_interval_iters: 75
   clip_grad: 10.0
   num_accum: 1

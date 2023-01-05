@@ -1,6 +1,4 @@
 import torch
-from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.utilities.seed import seed_everything
 from torchvision.transforms.functional import five_crop, crop
 import torchvision.transforms as T  # noqa
 

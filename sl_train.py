@@ -15,17 +15,18 @@ from utils.dist_utils import set_dist, is_distributed_set, is_master, barrier, g
 from utils.dist_utils import all_reduce_dict
 from utils.print_utils import time_log
 from utils.param_utils import count_params, compute_param_norm
+from utils.visualize_utils import visualization
 
 from build import build_dataset, build_dataloader, build_model, build_optimizer, build_scheduler, \
     split_params_for_optimizer
 from model.metric import UnSegMetrics
 from wrapper.UnsegWrapper import DINOUnSegWrapper
+from collections import defaultdict
 
 
 def train_epoch(
         model,
         optimizers,
-        # club_optimizer,
         schedulers,
         train_dataloader,
         valid_dataloader,
@@ -36,11 +37,11 @@ def train_epoch(
         current_iter: int,
         best_metric: Dict[str, float],
         best_epoch: int,
-        best_iter: int
+        best_iter: int,
+        scaler: torch.cuda.amp.GradScaler,
 ) -> Tuple[int, Dict[str, float], int, int]:
     # cfg = cfg
     model_m = model.module if isinstance(model, DistributedDataParallel) else model
-
     print_interval = cfg["train"]["print_interval_iters"]
     valid_interval = cfg["train"]["valid_interval_iters"]
     num_accum = cfg["train"].get("num_accum", 1)
@@ -56,13 +57,18 @@ def train_epoch(
     step_time = 0.0
 
     data_start_time = time.time()
+
     for it, data in enumerate(train_dataloader):
         s = time_log()
         s += f"Current iter: {it} (epoch {current_epoch}, " \
              f"epoch done: {it / len(train_dataloader) * 100:.2f} %)\n"
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
+        aug_img = data["aug_img"].to(device, non_blocking=True)
+        img_pos = data["img_pos"].to(device, non_blocking=True)
+        img_path = data["img_path"]
         label = data["label"].to(device, non_blocking=True)
+
         data_time = time.time() - data_start_time
         # -------------------------------- loss -------------------------------- #
         if it % num_accum == 0:
@@ -71,40 +77,58 @@ def train_epoch(
 
         if it % num_accum == (num_accum - 1):  # update step
             forward_start_time = time.time()
-            total_loss, output, _ = model(img, label) #, club_optimizer)  # total_loss, output, (linear_preds, cluster_preds)
+            with torch.cuda.amp.autocast(enabled=True):
+                total_loss, output, linear_pred = model(img=img, aug_img=aug_img, label=label, img_pos=img_pos,
+                                                        img_path=img_path,
+                                                        it=it)  # total_loss, output, (linear_preds, cluster_preds)
             forward_time = time.time() - forward_start_time
             backward_start_time = time.time()
             loss = total_loss / num_accum
-            loss.backward()
+            scaler.scale(loss).backward()
             backward_time = time.time() - backward_start_time
 
             step_start_time = time.time()
+            scaler.unscale_(optimizers[0])
             grad_norm = clip_grad_norm_(model_m.model.parameters(), max_norm=clip_grad)
+
             for optim, sched in zip(optimizers, schedulers):
-                optim.step()
+                scaler.step(optim)
+                scaler.update()
                 sched.step()
-            # schedulers[-1].step() # club_schedulers
             step_time = time.time() - step_start_time
 
             current_iter += 1
+
+            # for n, p in model.named_parameters():
+            #     if p.grad is None:
+            #         print(f'{n} has no grad')
+            # exit()
+
         elif isinstance(model, DistributedDataParallel):  # non-update step and DDP
             with model.no_sync():
-                total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                with torch.cuda.amp.autocast(enabled=True):
+                    total_loss, output, linear_pred = model(img=img, aug_img=aug_img, img_pos=img_pos, label=label
+                                                            )  # total_loss, output, (linear_preds, cluster_preds)
                 loss = total_loss / num_accum
-                loss.backward()
-        else:  # non-update step and not DDP
-            total_loss, output, _ = model(img, label)  # total_loss, output, (linear_preds, cluster_preds)
+                # loss.backward()
+                scaler.scale(loss).backward()
+
+        else:  # non-update step
+            # and not DDP
+            with torch.cuda.amp.autocast(enabled=True):
+                total_loss, output, linear_pred = model(img=img, aug_img=aug_img, img_pos=img_pos,
+                                                        label=label)  # total_loss, output, (linear_preds, cluster_preds)
 
             loss = total_loss / num_accum
-            loss.backward()
+            # loss.backward()
+            scaler.scale(loss).backward()
+
         # -------------------------------- print -------------------------------- #
 
         if it % print_interval == 0:
             output = all_reduce_dict(output, op="mean")
             param_norm = compute_param_norm(model_m.model.parameters())
             lr = schedulers[0].get_last_lr()[0]
-            # club_lr = schedulers[-1].get_last_lr()[0]
-
             for k, v in output.items():
                 s += f"... {k}: {v.item() if isinstance(v, torch.Tensor) else v:.6f}\n"
             s += f"... LR: {lr:.6f}\n"
@@ -120,7 +144,6 @@ def train_epoch(
                     "grad_norm": grad_norm.item(),
                     "param_norm": param_norm.item(),
                     "lr": lr,
-                    # "club_lr": club_lr,
                     "iters": current_iter,
                 }
                 for k, v in output.items():
@@ -128,41 +151,35 @@ def train_epoch(
                 wandb.log(log_dict)
 
         if (it > 0) and (it % valid_interval == 0):
-            _, cluster_result, linear_result = valid_epoch(
+            _, linear_result = valid_epoch(
                 model, valid_dataloader, cfg, device, current_iter, is_crf=False)
 
             if is_master():
-                if best_metric["Cluster_mIoU"] <= cluster_result["iou"].item():
+                if best_metric["Linear_mIoU"] <= linear_result["iou"].item():
                     s = time_log()
                     s += f"Valid updated!\n"
                     s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"
-                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']:.6f} ->  {cluster_result['iou'].item():.6f}\n"
-                    s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']:.6f} ->  {cluster_result['accuracy'].item():.6f}\n"
                     s += f"... Linear mIoU: {best_metric['Linear_mIoU']:.6f} ->  {linear_result['iou'].item():.6f}\n"
                     s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']:.6f} ->  {linear_result['accuracy'].item():.6f}"
                     print(s)
 
                     best_iter = current_iter
                     best_epoch = current_epoch
-                    best_metric["Cluster_mIoU"] = cluster_result["iou"].item()
-                    best_metric["Cluster_Accuracy"] = cluster_result["accuracy"].item()
                     best_metric["Linear_mIoU"] = linear_result["iou"].item()
                     best_metric["Linear_Accuracy"] = linear_result["accuracy"].item()
                     torch.save({
                         "model": model_m.state_dict(),
                         "optimizer": [optim.state_dict() for optim in optimizers],
-                        # "club_optimizer": club_optimizer.state_dict(),
                         "scheduler": [sched.state_dict() for sched in schedulers],
                         "best": best_metric.copy(),
                         "epoch": current_epoch,
                         "iter": current_iter,
+                        "scaler": scaler.state_dict(),
                     }, os.path.join(save_dir, "best.pth"))
                 else:
                     s = time_log()
                     s += f"Valid NOT updated ...\n"
                     s += f"... previous best was at {best_epoch} epoch, {best_iter} iters\n"
-                    s += f"... Cluster mIoU: {best_metric['Cluster_mIoU']:.6f} (best) vs {cluster_result['iou'].item():.6f}\n"
-                    s += f"... Cluster Accuracy: {best_metric['Cluster_Accuracy']:.6f} (best) vs {cluster_result['accuracy'].item():.6f}\n"
                     s += f"... Linear mIoU: {best_metric['Linear_mIoU']:.6f} (best) vs {linear_result['iou'].item():.6f}\n"
                     s += f"... Linear Accuracy: {best_metric['Linear_Accuracy']:.6f} (best) vs {linear_result['accuracy'].item():.6f}"
                     print(s)
@@ -181,16 +198,13 @@ def valid_epoch(
         cfg: Dict,
         device: torch.device,
         current_iter: int,
-        is_crf: bool = False,
-) -> Tuple[Dict, Dict, Dict]:
+        is_crf: bool = False
+) -> Tuple[Dict, Dict]:
     # model_m = model.module if isinstance(model, DistributedDataParallel) else model
     # model_m: DINOUnSegWrapper
 
-    cluster_m = UnSegMetrics(cfg["num_classes"], extra_classes=cfg["eval"]["extra_classes"], compute_hungarian=True,
-                             device=device)
     linear_m = UnSegMetrics(cfg["num_classes"], extra_classes=0, compute_hungarian=False, device=device)
 
-    cluster_m.reset()
     linear_m.reset()
 
     model.eval()
@@ -203,15 +217,96 @@ def valid_epoch(
     valid_start_time = time.time()
     result = dict()
     count = 0
+    saved_data = defaultdict(list)
+
+    if cfg["is_visualize"]:
+        os.makedirs(cfg["visualize_path"], exist_ok=True)
+
+    # from npy_append_array import NpyAppendArray
+    #
+    # pq_num = "pq_16"
+    # f_data = NpyAppendArray(f'./index/{pq_num}/data_1.npy')
+    # f_label = NpyAppendArray(f'./index/{pq_num}/label_1.npy')
+    #
+    # f_data2 = NpyAppendArray(f'./index/{pq_num}/data_2.npy')
+    # f_label2 = NpyAppendArray(f'./index/{pq_num}/label_2.npy')
+    #
+    # f_data3 = NpyAppendArray(f'./index/{pq_num}/data_3.npy')
+    # f_label3 = NpyAppendArray(f'./index/{pq_num}/label_3.npy')
+    #
+    # f_data4 = NpyAppendArray(f'./index/{pq_num}/data_4.npy')
+    # f_label4 = NpyAppendArray(f'./index/{pq_num}/label_4.npy')
+    #
+    # f_data5 = NpyAppendArray(f'./index/{pq_num}/data_5.npy')
+    # f_label5 = NpyAppendArray(f'./index/{pq_num}/label_5.npy')
+    #
+    # f_data6 = NpyAppendArray(f'./index/{pq_num}/data_6.npy')
+    # f_label6 = NpyAppendArray(f'./index/{pq_num}/label_6.npy')
+    #
+    # f_data7 = NpyAppendArray(f'./index/{pq_num}/data_7.npy')
+    # f_label7 = NpyAppendArray(f'./index/{pq_num}/label_7.npy')
+    #
+    # f_data8 = NpyAppendArray(f'./index/{pq_num}/data_8.npy')
+    # f_label8 = NpyAppendArray(f'./index/{pq_num}/label_8.npy')
+    #
+    # f_data9 = NpyAppendArray(f'./index/{pq_num}/data_9.npy')
+    # f_label9 = NpyAppendArray(f'./index/{pq_num}/label_9.npy')
+    #
+    # f_data10 = NpyAppendArray(f'./index/{pq_num}/data_10.npy')
+    # f_label10 = NpyAppendArray(f'./index/{pq_num}/label_10.npy')
 
     for it, data in enumerate(dataloader):
         # -------------------------------- data -------------------------------- #
         img = data["img"].to(device, non_blocking=True)
+        aug_img = data["aug_img"].to(device, non_blocking=True)
         label = data["label"].to(device, non_blocking=True)
+        img_path = data["img_path"]
         # -------------------------------- loss -------------------------------- #
-        _, output, (linear_preds, cluster_preds) = model(img, label, is_crf=is_crf)
-        cluster_m.update(cluster_preds.to(device), label)
+        with torch.cuda.amp.autocast(enabled=True):
+            _, output, linear_preds = model(img=img, aug_img=aug_img, label=label, is_crf=is_crf)
+
         linear_m.update(linear_preds.to(device), label)
+
+        #############
+        # import torch.nn.functional as F
+        # z_quantized_index = z_quantized_index.permute(1, 0, 2, 3).contiguous()
+        # z_quantized_index = F.interpolate(z_quantized_index.float(), size=label.shape[-2:], mode="nearest")
+        # b, c, h, w = z_quantized_index.shape  # (8, 64, 320, 320)
+        # z_quantized_index = z_quantized_index.view(b, c, -1).permute(0, 2, 1)  # (8, 320*320, 64)
+
+        # label_ = label.view(b, -1).contiguous()  # (8, 320*320)
+        # if it % 40 == 0:
+        #     print(it)
+        # if it < 40:
+        #     f_data.append(z_quantized_index.cpu().numpy())
+        #     f_label.append(label_.cpu().numpy())
+        # elif it < 80:
+        #     f_data2.append(z_quantized_index.cpu().numpy())
+        #     f_label2.append(label_.cpu().numpy())
+        # elif it < 120:
+        #     f_data3.append(z_quantized_index.cpu().numpy())
+        #     f_label3.append(label_.cpu().numpy())
+        # elif it < 160:
+        #     f_data4.append(z_quantized_index.cpu().numpy())
+        #     f_label4.append(label_.cpu().numpy())
+        # elif it < 200:
+        #     f_data5.append(z_quantized_index.cpu().numpy())
+        #     f_label5.append(label_.cpu().numpy())
+        # elif it < 240:
+        #     f_data6.append(z_quantized_index.cpu().numpy())
+        #     f_label6.append(label_.cpu().numpy())
+        # elif it < 280:
+        #     f_data7.append(z_quantized_index.cpu().numpy())
+        #     f_label7.append(label_.cpu().numpy())
+        # elif it < 320:
+        #     f_data8.append(z_quantized_index.cpu().numpy())
+        #     f_label8.append(label_.cpu().numpy())
+        # elif it < 360:
+        #     f_data9.append(z_quantized_index.cpu().numpy())
+        #     f_label9.append(label_.cpu().numpy())
+        # else:
+        #     f_data10.append(z_quantized_index.cpu().numpy())
+        #     f_label10.append(label_.cpu().numpy())
 
         for k, v in output.items():
             if k not in result:
@@ -220,9 +315,23 @@ def valid_epoch(
                 result[k] += v
         count += 1
 
+        if cfg["is_visualize"] and is_crf:
+            os.makedirs(cfg["visualize_path"], exist_ok=True)
+            saved_data["img_path"].append("".join(img_path))
+            saved_data["linear_preds"].append(linear_preds.cpu().squeeze(0))
+            saved_data["label"].append(label.cpu().squeeze(0))
+
+            #     dataset_name = cfg["dataset_name"]
+            #     pq_visualization(save_dir=f"./visualize/pq/{dataset_name}/vq/",
+            #                      saved_data=z_quantized_index,
+            #                      img_path=img_path
+            #                      )
+
     barrier()
-    cluster_result = cluster_m.compute()  # {iou, accuracy}
-    linear_result = linear_m.compute()  # {iou, accuracy}
+    linear_result = linear_m.compute("linear")  # {iou, accuracy}
+
+    if cfg["is_visualize"] and is_crf:
+        visualization(cfg["visualize_path"] + "/" + str(current_iter), cfg["dataset_name"], saved_data)
 
     barrier()
     for k, v in result.items():
@@ -232,8 +341,7 @@ def valid_epoch(
     valid_time = time.time() - valid_start_time
 
     if is_master():
-        s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-        s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+        s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
         for k, v in result.items():
             s += f"... {k}: {v.item() if isinstance(v, torch.Tensor) else v:.6f}\n"
         s += f"... time: {valid_time:.3f} sec"
@@ -241,8 +349,6 @@ def valid_epoch(
         print(s)
         log_dict = {
             "iters": current_iter,
-            "Cluster_mIoU": cluster_result['iou'].item(),
-            "Cluster_Accuracy": cluster_result['accuracy'].item(),
             "Linear_mIoU": linear_result['iou'].item(),
             "Linear_Accuracy": linear_result['accuracy'].item(),
         }
@@ -253,13 +359,15 @@ def valid_epoch(
         if not is_crf:
             wandb.log(log_dict)
 
-    return result, cluster_result, linear_result
+    return result, linear_result
 
 
 def run(cfg: Dict, debug: bool = False) -> None:
     # ======================================================================================== #
     # Initialize
     # ======================================================================================== #
+    scaler = torch.cuda.amp.GradScaler(init_scale=2048, growth_interval=1000, enabled=True)
+
     device, local_rank = set_dist(device_type="cuda")
     if is_master():
         pprint.pprint(cfg)  # print config to check if all arguments are correctly given.
@@ -276,12 +384,12 @@ def run(cfg: Dict, debug: bool = False) -> None:
     # ======================================================================================== #
     # Model
     # ======================================================================================== #
-    model = build_model(cfg, name=cfg["wandb"]["name"].lower())
+    model = build_model(cfg, name=cfg["wandb"]["name"].lower(), world_size=get_world_size())
     model = model.to(device)
     if is_distributed_set():
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = DistributedDataParallel(model, device_ids=[local_rank],
-                                        output_device=device) # , find_unused_parameters=True) # club
+                                        output_device=device)
         model_m = model.module  # actual model without wrapping
 
     else:
@@ -302,29 +410,17 @@ def run(cfg: Dict, debug: bool = False) -> None:
     # Optimizer & Scheduler
     # ======================================================================================== #
     model_params = split_params_for_optimizer(model_m.model, cfg["optimizer"])
-    # club_params = model_m.model.club_enc.parameters()
-    cluster_params = model_m.evaluator.cluster_probe.parameters()
-    linear_params = model_m.evaluator.linear_probe.parameters()
 
     model_optimizer = build_optimizer(cfg["optimizer"]["model"], model_params)
-    # club_optimizer = build_optimizer(cfg["optimizer"]["club_enc"], club_params)
-    cluster_optimizer = build_optimizer(cfg["optimizer"]["cluster"], cluster_params)
-    linear_optimizer = build_optimizer(cfg["optimizer"]["linear"], linear_params)
 
-    optimizers = [model_optimizer, cluster_optimizer, linear_optimizer]
+    optimizers = [model_optimizer]
 
     iter_per_epoch = len(train_dataloader)
     num_accum = cfg["train"].get("num_accum", 1)
     model_scheduler = build_scheduler(cfg["scheduler"]["model"], model_optimizer, iter_per_epoch, num_accum,
                                       epoch=cfg["train"]["max_epochs"])
-    # club_scheduler = build_scheduler(cfg["scheduler"]["club_enc"], club_optimizer, iter_per_epoch, num_accum,
-    #                                  epoch=cfg["train"]["max_epochs"])
-    cluster_scheduler = build_scheduler(cfg["scheduler"]["cluster"], cluster_optimizer, iter_per_epoch, num_accum,
-                                        epoch=cfg["train"]["max_epochs"])
-    linear_scheduler = build_scheduler(cfg["scheduler"]["linear"], linear_optimizer, iter_per_epoch, num_accum,
-                                       epoch=cfg["train"]["max_epochs"])
 
-    schedulers = [model_scheduler, cluster_scheduler, linear_scheduler] #, club_scheduler]
+    schedulers = [model_scheduler]
 
     for m in model.modules():
         if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.SyncBatchNorm)):
@@ -340,8 +436,6 @@ def run(cfg: Dict, debug: bool = False) -> None:
 
     # -------- status -------- #
     best_metric = dict()
-    best_metric["Cluster_mIoU"] = 0.0
-    best_metric["Cluster_Accuracy"] = 0.0
     best_metric["Linear_mIoU"] = 0.0
     best_metric["Linear_Accuracy"] = 0.0
 
@@ -366,13 +460,14 @@ def run(cfg: Dict, debug: bool = False) -> None:
         # -------- train body -------- #
         epoch_start_time = time.time()  # second
         current_iter, best_metric, best_epoch, best_iter = train_epoch(model, optimizers,
-                                                                       # club_optimizer,
                                                                        schedulers,
                                                                        train_dataloader,
                                                                        valid_dataloader,
                                                                        cfg, device, save_dir, current_epoch,
-                                                                       current_iter, best_metric, best_epoch, best_iter)
+                                                                       current_iter, best_metric, best_epoch, best_iter,
+                                                                       scaler)
         epoch_time = time.time() - epoch_start_time
+
         if is_master():
             s = time_log()
             s += f"End train epoch {current_epoch} / {max_epochs}\n"
@@ -390,15 +485,12 @@ def run(cfg: Dict, debug: bool = False) -> None:
     model_m.load_state_dict(best_checkpoint['model'], strict=True)
     final_start_time = time.time()
     s += "Final evaluation (before CRF)\n"
-
-    _, cluster_result, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=False)
-    s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-    s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+    _, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=False)
+    s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
     s += time_log()
     s += "Final evaluation (after CRF)\n"
-    _, cluster_result, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=True)
-    s += f"Cluster: mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
-    s += f"Linear: mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
+    _, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=True)
+    s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"
 
     final_time = time.time() - final_start_time
     s += f"... time: {final_time:.3f} sec"

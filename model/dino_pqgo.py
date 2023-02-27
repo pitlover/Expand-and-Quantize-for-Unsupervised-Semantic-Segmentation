@@ -1,5 +1,5 @@
-import os
-from typing import Dict, Tuple, List, Optional, Union
+
+from typing import Dict, Tuple, List, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,7 +10,7 @@ from model.dino import DinoFeaturizer
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
-from model.loss import JSDLoss, JSDPosLoss, EntropyLoss, STEGOLoss
+from model.loss import JSDLoss,  EntropyLoss, STEGOLoss
 
 
 class DIONPQGO(nn.Module):
@@ -28,8 +28,8 @@ class DIONPQGO(nn.Module):
         # # -------- head -------- #
         self.cluster1 = self.make_clusterer(self.feat_dim)
         self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
-        # TODO grouping
-        self.grouping = nn.Conv2d(cfg["vq"]["embed_dims"][0], cfg["vq"]["embed_dims"][0], (1, 1))
+        # # TODO grouping
+        # self.grouping = nn.Conv2d(cfg["vq"]["embed_dims"][0], cfg["vq"]["embed_dims"][0], (1, 1))
 
         # # -------- vq -------- #
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
@@ -45,6 +45,7 @@ class DIONPQGO(nn.Module):
         self.use_split = cfg["vq"].get("use_split", False)
         self.need_initialized = cfg["vq"].get("need_initialized", False)
         self.pq_dropout = cfg["vq"].get("pq_dropout", 0.0)
+
         self.jsd_ts = cfg_loss["jsd"].get("temperature", 1.0)
         self.num_query = cfg_loss["jsd"].get("num_query", 3)
         self.num_pos = cfg_loss["jsd"].get("num_pos", 10)
@@ -123,8 +124,8 @@ class DIONPQGO(nn.Module):
         else:
             code_pos = None  # placeholder
 
-        # TODO grouping
-        code = self.grouping(code)
+        # # TODO grouping
+        # code = self.grouping(code)
 
         quantized_feat, (z_split, z_quantized, z_quantized_index), outputs, distance_prob = self.vq_blocks[0](code,
                                                                                                               code_pos,

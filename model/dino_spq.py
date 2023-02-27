@@ -1,20 +1,15 @@
-import os
-from typing import Dict, Tuple, List, Optional
+
+from typing import Dict, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import random
 
 from model.dino import DinoFeaturizer
 # TODO kmeans sampling
 # from model.blocks.resnet_linear import EncResBlock, DecResBlock
-from model.blocks.module import EncResBlock, DecResBlock
 
-from utils.dist_utils import all_reduce_tensor
-import numpy as np
-from sklearn.cluster import KMeans
 # import faiss
-from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss
+from model.loss import InfoNCELoss, JSDLoss
 
 
 class DINOSPQ(nn.Module):

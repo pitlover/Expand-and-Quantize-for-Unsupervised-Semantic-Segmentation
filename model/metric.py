@@ -3,7 +3,6 @@ import numpy as np
 import torch.nn as nn
 from scipy.optimize import linear_sum_assignment
 import torch
-from utils.dist_utils import is_master
 from utils.dist_utils import all_reduce_tensor
 import pandas as pd
 import os
@@ -59,7 +58,7 @@ class UnSegMetrics(nn.Module):
         self.confusion_matrix += confusion
 
     @torch.no_grad()
-    def compute(self) -> Dict[str, torch.Tensor]:
+    def compute(self, prefix: str = None) -> Dict[str, torch.Tensor]:
         """Measure mIoU and accuracy."""
         self.confusion_matrix = all_reduce_tensor(self.confusion_matrix, op="sum")
 
@@ -92,22 +91,21 @@ class UnSegMetrics(nn.Module):
 
         iou = tp / (tp + fp + fn)
         iou = iou[~torch.isnan(iou)].mean()
-        # precision = tp / (tp + fn)
+        precision = tp / (tp + fn)
         accuracy = torch.sum(tp) / torch.sum(self.histogram)
 
         output = dict(iou=100 * iou, accuracy=100 * accuracy)
 
         # TODO class_matrix acc
-        # if is_master() and current_iter % 2500 == 1:
-        #     os.makedirs(f'./class_matrix/{stage}', exist_ok=True)
+        # os.makedirs(f'./class_matrix/', exist_ok=True)
         #
-        #     # tp : (27, 1)
-        #     predict = torch.sum(self.histogram, dim=1)
-        #     class_acc = torch.div(tp, predict).unsqueeze(1)
-        #     tmp = torch.cat([self.histogram, class_acc], dim=1)
-        #     matrix_np = tmp.cpu().numpy()
-        #     matrix_df = pd.DataFrame(matrix_np)
-        #     matrix_df.to_csv(f'./class_matrix/{stage}/{stage}_{current_iter}.csv')
+        # # tp : (27, 1)
+        # precision = precision * 100
+        # precision = precision.unsqueeze(-1)
+        # tmp = torch.cat([self.histogram, precision], dim=1)
+        # matrix_np = tmp.cpu().numpy()
+        # matrix_df = pd.DataFrame(matrix_np)
+        # matrix_df.to_csv(f'./class_matrix/STEGO/{prefix}/{prefix}_crf.csv')
 
         return output
 

@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_reproduce_128"
+  name: "SL_addadd_128"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -27,7 +27,6 @@ model:
     pretrained_weights: null
     dropout: true
     dim: 128
-
 
 # ---------------------------------------------------------------- #
 loss:
@@ -141,7 +140,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 10
+  max_epochs: 1
   print_interval_iters: 25
   valid_interval_iters: 75
   clip_grad: 10.0

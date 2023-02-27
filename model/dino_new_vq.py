@@ -1,4 +1,4 @@
-import os
+
 from typing import Dict, Tuple, List, Optional
 import torch
 import torch.nn as nn
@@ -14,7 +14,7 @@ from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
 # import faiss
-from model.loss import InfoNCELoss, JSDLoss, MarginRankingLoss, EntropyLoss
+from model.loss import InfoNCELoss, JSDLoss,  EntropyLoss
 
 
 @torch.no_grad()

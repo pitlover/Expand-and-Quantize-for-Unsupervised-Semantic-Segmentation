@@ -1,4 +1,4 @@
-import os
+
 from typing import Dict, Tuple, List, Optional
 import torch
 import torch.nn as nn
@@ -10,7 +10,7 @@ from model.dino import DinoFeaturizer
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
-from model.loss import InfoNCELoss, JSDLoss, JSDPosLoss, MarginRankingLoss, EntropyLoss, STEGOLoss
+from model.loss import   JSDPosLoss,  STEGOLoss
 from model.blocks.module import SegmentationHead
 
 

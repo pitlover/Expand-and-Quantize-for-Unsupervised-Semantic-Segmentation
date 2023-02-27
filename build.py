@@ -1,7 +1,7 @@
-import torch
+
 import torch.nn as nn
 from torch.optim import SGD, Adam, AdamW
-from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR, SequentialLR
+from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -30,8 +30,7 @@ from wrapper.ResWrapper import ResWrapper
 from wrapper.ClusterWrapper import ClusterWrapper
 from wrapper.NewVQWrapper import DINONewVQWrapper
 from wrapper.PQGOWrapper import PQGOWrapper
-from wrapper.EMAWrapper import EMAWrapper
-
+from wrapper.SupervisedWrapper import SupervisedWrapper
 
 def build_model(cfg: dict,
                 name: str = None,
@@ -39,8 +38,8 @@ def build_model(cfg: dict,
     # cfg["model"]
     if "hihi" in name:
         model = DINOUnSegWrapper(cfg, DINOUnSeg(cfg["model"]))
-    # elif "ema" in name:
-    #     model = EMAWrapper(cfg, DIONEMA(cfg["model"], cfg["loss"]))
+    elif "sl" in name:
+        model = SupervisedWrapper(cfg, DINOStego(cfg))
     elif "pqgocls" in name:
         model = PQGOWrapper(cfg, DINOPQGOCLS(cfg["model"], cfg["loss"]))
     elif "pqgo" in name:
@@ -191,8 +190,8 @@ def build_dataloader(cfg: dict, dataset: UnSegDataset, mode: str = "train") -> D
         world_size = get_world_size()
         loader = DataLoader(
             dataset,
-            batch_size=1 if "val" in mode and cfg["is_visualize"] else max(cfg["batch_size"] // world_size, 1),
-            # for visualization
+            batch_size= max(cfg["batch_size"] // world_size, 1),
+            # batch_size=1 if "val" in mode and cfg["is_visualize"] else max(cfg["batch_size"] // world_size, 1),
             num_workers=max((cfg["num_workers"] + world_size - 1) // world_size, 1),
             pin_memory=True,
             sampler=ddp_sampler

@@ -4,8 +4,6 @@ from typing import Dict, Tuple, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa
-import numpy as np
-from model.loss import JSDLoss
 from utils.dist_utils import all_reduce_tensor, broadcast_tensors
 
 __all__ = ["VectorQuantizer", "EMAVectorQuantizer", "ProductQuantizerWrapper"]

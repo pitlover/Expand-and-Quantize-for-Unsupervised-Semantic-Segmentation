@@ -23,6 +23,14 @@ class DINOStego(nn.Module):
 
         self.corr_loss = STEGOLoss(cfg["loss"])
 
+    def additional_linear(self, ):
+        return torch.nn.Sequential(
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(self.dim, self.dim, (1, 1)),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(self.dim, self.dim, (1, 1))
+        )
+
     def make_clusterer(self, in_channels):
         return torch.nn.Sequential(
             torch.nn.Conv2d(in_channels, self.dim, (1, 1)))
@@ -40,7 +48,7 @@ class DINOStego(nn.Module):
         dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
         dino_feat = self.dropout(dino_feat)
         code = self.cluster1(dino_feat)
-        code += self.cluster2(dino_feat)
+        code += self.cluster2(dino_feat)  # Relu - Conv(1024 -> 1024)
 
         if self.training:
             dino_feat_pos = self.extractor(pos_img)  # (b, 384, 28, 28) (b, d, h, w)
@@ -49,4 +57,4 @@ class DINOStego(nn.Module):
             code_pos += self.cluster2(dino_feat_pos)
 
             output["stego-loss"] = self.corr_loss(dino_feat, dino_feat_pos, code, code_pos)
-        return dino_feat, code, output
+        return dino_feat, code, output, None

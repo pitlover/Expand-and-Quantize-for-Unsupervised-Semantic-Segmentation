@@ -1,5 +1,4 @@
 from typing import Dict, Tuple
-from collections import OrderedDict
 import os
 import time
 import pprint
@@ -16,7 +15,7 @@ from utils.dist_utils import set_dist, is_distributed_set, is_master, barrier, g
 from utils.dist_utils import all_reduce_dict
 from utils.print_utils import time_log
 from utils.param_utils import count_params, compute_param_norm
-from utils.visualize_utils import visualization, pq_visualization
+from utils.visualize_utils import visualization
 
 from build import build_dataset, build_dataloader, build_model, build_optimizer, build_scheduler, \
     split_params_for_optimizer
@@ -228,8 +227,42 @@ def valid_epoch(
     result = dict()
     count = 0
     saved_data = defaultdict(list)
+
     if cfg["is_visualize"]:
         os.makedirs(cfg["visualize_path"], exist_ok=True)
+
+    # from npy_append_array import NpyAppendArray
+    #
+    # pq_num = "pq_16"
+    # f_data = NpyAppendArray(f'./index/{pq_num}/data_1.npy')
+    # f_label = NpyAppendArray(f'./index/{pq_num}/label_1.npy')
+    #
+    # f_data2 = NpyAppendArray(f'./index/{pq_num}/data_2.npy')
+    # f_label2 = NpyAppendArray(f'./index/{pq_num}/label_2.npy')
+    #
+    # f_data3 = NpyAppendArray(f'./index/{pq_num}/data_3.npy')
+    # f_label3 = NpyAppendArray(f'./index/{pq_num}/label_3.npy')
+    #
+    # f_data4 = NpyAppendArray(f'./index/{pq_num}/data_4.npy')
+    # f_label4 = NpyAppendArray(f'./index/{pq_num}/label_4.npy')
+    #
+    # f_data5 = NpyAppendArray(f'./index/{pq_num}/data_5.npy')
+    # f_label5 = NpyAppendArray(f'./index/{pq_num}/label_5.npy')
+    #
+    # f_data6 = NpyAppendArray(f'./index/{pq_num}/data_6.npy')
+    # f_label6 = NpyAppendArray(f'./index/{pq_num}/label_6.npy')
+    #
+    # f_data7 = NpyAppendArray(f'./index/{pq_num}/data_7.npy')
+    # f_label7 = NpyAppendArray(f'./index/{pq_num}/label_7.npy')
+    #
+    # f_data8 = NpyAppendArray(f'./index/{pq_num}/data_8.npy')
+    # f_label8 = NpyAppendArray(f'./index/{pq_num}/label_8.npy')
+    #
+    # f_data9 = NpyAppendArray(f'./index/{pq_num}/data_9.npy')
+    # f_label9 = NpyAppendArray(f'./index/{pq_num}/label_9.npy')
+    #
+    # f_data10 = NpyAppendArray(f'./index/{pq_num}/data_10.npy')
+    # f_label10 = NpyAppendArray(f'./index/{pq_num}/label_10.npy')
 
     for it, data in enumerate(dataloader):
         # -------------------------------- data -------------------------------- #
@@ -241,8 +274,50 @@ def valid_epoch(
         with torch.cuda.amp.autocast(enabled=True):
             _, output, (linear_preds, cluster_preds), z_quantized_index = model(img=img, aug_img=aug_img, label=label,
                                                                                 is_crf=is_crf)
+
         cluster_m.update(cluster_preds.to(device), label)
         linear_m.update(linear_preds.to(device), label)
+
+        #############
+        # import torch.nn.functional as F
+        # z_quantized_index = z_quantized_index.permute(1, 0, 2, 3).contiguous()
+        # z_quantized_index = F.interpolate(z_quantized_index.float(), size=label.shape[-2:], mode="nearest")
+        # b, c, h, w = z_quantized_index.shape  # (8, 64, 320, 320)
+        # z_quantized_index = z_quantized_index.view(b, c, -1).permute(0, 2, 1)  # (8, 320*320, 64)
+
+        # label_ = label.view(b, -1).contiguous()  # (8, 320*320)
+        # if it % 40 == 0:
+        #     print(it)
+        # if it < 40:
+        #     f_data.append(z_quantized_index.cpu().numpy())
+        #     f_label.append(label_.cpu().numpy())
+        # elif it < 80:
+        #     f_data2.append(z_quantized_index.cpu().numpy())
+        #     f_label2.append(label_.cpu().numpy())
+        # elif it < 120:
+        #     f_data3.append(z_quantized_index.cpu().numpy())
+        #     f_label3.append(label_.cpu().numpy())
+        # elif it < 160:
+        #     f_data4.append(z_quantized_index.cpu().numpy())
+        #     f_label4.append(label_.cpu().numpy())
+        # elif it < 200:
+        #     f_data5.append(z_quantized_index.cpu().numpy())
+        #     f_label5.append(label_.cpu().numpy())
+        # elif it < 240:
+        #     f_data6.append(z_quantized_index.cpu().numpy())
+        #     f_label6.append(label_.cpu().numpy())
+        # elif it < 280:
+        #     f_data7.append(z_quantized_index.cpu().numpy())
+        #     f_label7.append(label_.cpu().numpy())
+        # elif it < 320:
+        #     f_data8.append(z_quantized_index.cpu().numpy())
+        #     f_label8.append(label_.cpu().numpy())
+        # elif it < 360:
+        #     f_data9.append(z_quantized_index.cpu().numpy())
+        #     f_label9.append(label_.cpu().numpy())
+        # else:
+        #     f_data10.append(z_quantized_index.cpu().numpy())
+        #     f_label10.append(label_.cpu().numpy())
 
         for k, v in output.items():
             if k not in result:
@@ -258,18 +333,17 @@ def valid_epoch(
             saved_data["linear_preds"].append(linear_preds.cpu().squeeze(0))
             saved_data["label"].append(label.cpu().squeeze(0))
 
-        # if is_crf:
-        #     dataset_name = cfg["dataset_name"]
-        #     pq_visualization(save_dir=f"./visualize/pq/{dataset_name}/vq/",
-        #                      saved_data=z_quantized_index,
-        #                      img_path=img_path
-        #                      )
+            #     dataset_name = cfg["dataset_name"]
+            #     pq_visualization(save_dir=f"./visualize/pq/{dataset_name}/vq/",
+            #                      saved_data=z_quantized_index,
+            #                      img_path=img_path
+            #                      )
 
     barrier()
-    cluster_result = cluster_m.compute()  # {iou, accuracy}
-    linear_result = linear_m.compute()  # {iou, accuracy}
+    cluster_result = cluster_m.compute("cluster")  # {iou, accuracy}
+    linear_result = linear_m.compute("linear")  # {iou, accuracy}
 
-    if cfg["is_visualize"] and (current_iter == 10000):
+    if cfg["is_visualize"] and is_crf:
         visualization(cfg["visualize_path"] + "/" + str(current_iter), cfg["dataset_name"], saved_data, cluster_m)
 
     barrier()
@@ -437,7 +511,6 @@ def run(cfg: Dict, debug: bool = False) -> None:
     model_m.load_state_dict(best_checkpoint['model'], strict=True)
     final_start_time = time.time()
     s += "Final evaluation (before CRF)\n"
-
     _, cluster_result, linear_result = valid_epoch(model_m, valid_dataloader, cfg, device, current_iter, is_crf=False)
     s += f"[Cluster] mIoU {cluster_result['iou'].item():.6f}, acc: {cluster_result['accuracy'].item():.6f}\n"
     s += f"[Linear] mIoU {linear_result['iou'].item():.6f}, acc: {linear_result['accuracy'].item():.6f}\n"

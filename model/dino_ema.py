@@ -9,8 +9,7 @@ import torch.distributed as dist
 
 from model.blocks.module import SegmentationHead
 from model.dino import DinoFeaturizer
-from model.loss import STEGOLoss, ProxyLoss
-from utils.dist_utils import all_reduce_tensor
+from model.loss import  ProxyLoss
 
 
 class DIONEMA(nn.Module):

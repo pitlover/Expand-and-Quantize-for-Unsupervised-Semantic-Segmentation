@@ -1,11 +1,8 @@
 from typing import Dict, Tuple
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from model.dino_unseg import DINOUnSeg
 from model.evaluator import UnSegEvaluator
-from model.sub_evaluator import SubEvaluator
-from utils.visualize_utils import pq_visualization
 
 __all__ = [
     "PQGOWrapper"
@@ -67,8 +64,6 @@ class PQGOWrapper(nn.Module):
 
         code, feat_vqs, (z_split, z_quantized, z_quantized_index), output = self.model(img=img, aug_img=aug_img,
                                                                                        img_pos=img_pos, it=it)
-
-
 
         # feat: (b, 384, 28, 28)
         # vqs: (b, vq_k0, 28, 28), (b, vq_k1, 28, 28), ...

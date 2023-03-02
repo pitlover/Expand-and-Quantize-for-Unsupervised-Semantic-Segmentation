@@ -37,8 +37,8 @@ class StegoWrapper(nn.Module):
                 aug_img: torch.Tensor,
                 label: torch.Tensor,
                 img_pos: torch.Tensor = None,
-                img_path : str = None,
-                it : int = -1,
+                img_path: str = None,
+                it: int = -1,
                 is_crf: bool = False,
                 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
         dino_feat, code, output = self.model(img, img_pos)
@@ -48,7 +48,7 @@ class StegoWrapper(nn.Module):
             model_loss = output["stego-loss"] * self.stego_weight
             output["loss"] = model_loss
 
-        out = code.detach()
+        out = code.detach() # (b, 70, 40, 40)
 
         linear_loss, linear_preds, cluster_loss, cluster_preds = self.evaluator(
             out, img, label=label, is_crf=is_crf)
@@ -57,4 +57,4 @@ class StegoWrapper(nn.Module):
 
         total_loss = model_loss + linear_loss + cluster_loss
 
-        return total_loss, output, (linear_preds, cluster_preds), None
+        return total_loss, output, (linear_preds, cluster_preds), code

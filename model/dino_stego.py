@@ -48,7 +48,7 @@ class DINOStego(nn.Module):
         dino_feat = self.extractor(img)  # (b, 384, 28, 28) (b, d, h, w)
         dino_feat = self.dropout(dino_feat)
         code = self.cluster1(dino_feat)
-        code += self.cluster2(dino_feat)  # Relu - Conv(1024 -> 1024)
+        code += self.cluster2(dino_feat)
 
         if self.training:
             dino_feat_pos = self.extractor(pos_img)  # (b, 384, 28, 28) (b, d, h, w)
@@ -57,4 +57,4 @@ class DINOStego(nn.Module):
             code_pos += self.cluster2(dino_feat_pos)
 
             output["stego-loss"] = self.corr_loss(dino_feat, dino_feat_pos, code, code_pos)
-        return dino_feat, code, output, None
+        return dino_feat, code, output

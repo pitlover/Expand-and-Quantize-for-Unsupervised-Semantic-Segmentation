@@ -1,4 +1,3 @@
-
 from typing import Dict, Tuple, List, Optional
 import torch
 import torch.nn as nn
@@ -10,7 +9,7 @@ from model.dino import DinoFeaturizer
 from utils.dist_utils import all_reduce_tensor
 import numpy as np
 from sklearn.cluster import KMeans
-from model.loss import JSDLoss,  EntropyLoss, STEGOLoss
+from model.loss import JSDLoss, EntropyLoss, STEGOLoss
 
 
 class DIONPQGO(nn.Module):
@@ -28,6 +27,7 @@ class DIONPQGO(nn.Module):
         # # -------- head -------- #
         self.cluster1 = self.make_clusterer(self.feat_dim)
         self.cluster2 = self.make_nonlinear_clusterer(self.feat_dim)
+        # self.addadd = self.additional_linear() # TODO addadd
         # # TODO grouping
         # self.grouping = nn.Conv2d(cfg["vq"]["embed_dims"][0], cfg["vq"]["embed_dims"][0], (1, 1))
 
@@ -35,6 +35,7 @@ class DIONPQGO(nn.Module):
         vq_num_codebooks = cfg["vq"]["num_codebooks"]
         vq_embed_dims = cfg["vq"]["embed_dims"]
         assert len(vq_num_codebooks) == len(vq_embed_dims)
+        self.embed_dim = vq_embed_dims[0]
         self.vq_num_codebooks = vq_num_codebooks[0]
         self.num_vq = len(vq_num_codebooks)
         self.beta = cfg["vq"]["beta"]
@@ -90,6 +91,14 @@ class DIONPQGO(nn.Module):
         # -------- loss -------- #
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
 
+    def additional_linear(self, ):   # TODO addadd
+        return torch.nn.Sequential(
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(self.hidden_dim, self.hidden_dim, (1, 1)),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(self.hidden_dim, self.hidden_dim, (1, 1))
+        )
+
     def make_clusterer(self, in_channels):
         return torch.nn.Sequential(
             torch.nn.Conv2d(in_channels, self.hidden_dim, (1, 1)))
@@ -115,12 +124,14 @@ class DIONPQGO(nn.Module):
         dino_feat = self.dropout(dino_feat)
         code = self.cluster1(dino_feat)
         code += self.cluster2(dino_feat)
+        # code = self.addadd(code) # TODO addadd
 
         if self.training:
             dino_feat_pos = self.extractor(img_pos)  # (b, 384, 28, 28) (b, d, h, w)
             dino_feat_pos = self.dropout(dino_feat_pos)
             code_pos = self.cluster1(dino_feat_pos)
             code_pos += self.cluster2(dino_feat_pos)
+            # code_pos = self.addadd(code_pos)  # TODO addadd
         else:
             code_pos = None  # placeholder
 

@@ -21,7 +21,7 @@ import seaborn as sns
 num = 10000
 pq_num = 64
 file_name = f"pq_{pq_num}"
-for i in range(4, 5):
+for i in range(6, 11):
     label = np.load(f"./index/pq_{pq_num}/label_{i}.npy")  # (240, 102400)
     data = np.load(f"./index/pq_{pq_num}/data_{i}.npy")  # (240, 102400, 64)
     print("*** Load npy ***")

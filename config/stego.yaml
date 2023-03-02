@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_reproduce_128"
+  name: "STEGO_70_5cropX"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -26,7 +26,7 @@ model:
     drop_prob: 0.1
     pretrained_weights: null
     dropout: true
-    dim: 128
+    dim: 70
 
 
 # ---------------------------------------------------------------- #
@@ -49,20 +49,20 @@ loss:
   #  pos_intra_shift: 0.12
 
   # cityscapes with vit-small
-  #  neg_inter_weight: 0.95
-  #  pos_inter_weight: 0.43
-  #  pos_intra_weight: 1.00
-  #  neg_inter_shift: 0.31
-  #  pos_inter_shift: 0.22
-  #  pos_intra_shift: 0.36
+#  neg_inter_weight: 0.95
+#  pos_inter_weight: 0.43
+#  pos_intra_weight: 1.00
+#  neg_inter_shift: 0.31
+#  pos_inter_shift: 0.22
+#  pos_intra_shift: 0.36
 
   # cityscapes with vit-base
 #  neg_inter_weight: 0.72
-#  pos_inter_weight: 0.18
-#  pos_intra_weight: 0.46
-#  neg_inter_shift: 0.25
-#  pos_inter_shift: 0.20
-#  pos_intra_shift: 0.25
+#  pos_inter_weight: 0.43
+#  pos_intra_weight: 1.0
+#  neg_inter_shift: 0.31
+#  pos_inter_shift: 0.24
+#  pos_intra_shift: 0.39
 
   # potsdam with vit-base
   #  neg_inter_weight: 0.63

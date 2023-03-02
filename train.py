@@ -233,7 +233,7 @@ def valid_epoch(
 
     # from npy_append_array import NpyAppendArray
     #
-    # pq_num = "pq_16"
+    # pq_num = "stego"
     # f_data = NpyAppendArray(f'./index/{pq_num}/data_1.npy')
     # f_label = NpyAppendArray(f'./index/{pq_num}/label_1.npy')
     #
@@ -280,11 +280,11 @@ def valid_epoch(
 
         #############
         # import torch.nn.functional as F
-        # z_quantized_index = z_quantized_index.permute(1, 0, 2, 3).contiguous()
+        # # z_quantized_index = z_quantized_index.permute(1, 0, 2, 3).contiguous() # (70, 8, 40, 40)
         # z_quantized_index = F.interpolate(z_quantized_index.float(), size=label.shape[-2:], mode="nearest")
         # b, c, h, w = z_quantized_index.shape  # (8, 64, 320, 320)
         # z_quantized_index = z_quantized_index.view(b, c, -1).permute(0, 2, 1)  # (8, 320*320, 64)
-
+        #
         # label_ = label.view(b, -1).contiguous()  # (8, 320*320)
         # if it % 40 == 0:
         #     print(it)
@@ -338,10 +338,10 @@ def valid_epoch(
             #                      saved_data=z_quantized_index,
             #                      img_path=img_path
             #                      )
-
+    # exit()
     barrier()
-    cluster_result = cluster_m.compute("cluster")  # {iou, accuracy}
-    linear_result = linear_m.compute("linear")  # {iou, accuracy}
+    cluster_result = cluster_m.compute(f"cluster_{is_crf}")  # {iou, accuracy}
+    linear_result = linear_m.compute(f"linear_{is_crf}")  # {iou, accuracy}
 
     if cfg["is_visualize"] and is_crf:
         visualization(cfg["visualize_path"] + "/" + str(current_iter), cfg["dataset_name"], saved_data, cluster_m)

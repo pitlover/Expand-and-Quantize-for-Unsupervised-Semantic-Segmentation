@@ -97,15 +97,15 @@ class UnSegMetrics(nn.Module):
         output = dict(iou=100 * iou, accuracy=100 * accuracy)
 
         # TODO class_matrix acc
-        # os.makedirs(f'./class_matrix/', exist_ok=True)
-        #
-        # # tp : (27, 1)
-        # precision = precision * 100
-        # precision = precision.unsqueeze(-1)
-        # tmp = torch.cat([self.histogram, precision], dim=1)
-        # matrix_np = tmp.cpu().numpy()
-        # matrix_df = pd.DataFrame(matrix_np)
-        # matrix_df.to_csv(f'./class_matrix/STEGO/{prefix}/{prefix}_crf.csv')
+        os.makedirs(f'./class_matrix/Cityscapes/STEGO/{prefix}/', exist_ok=True)
+
+        # tp : (27, 1)
+        precision = precision * 100
+        precision = precision.unsqueeze(-1)
+        tmp = torch.cat([self.histogram, precision], dim=1)
+        matrix_np = tmp.cpu().numpy()
+        matrix_df = pd.DataFrame(matrix_np)
+        matrix_df.to_csv(f'./class_matrix/Cityscapes/STEGO/{prefix}/{prefix}_7.csv')
 
         return output
 

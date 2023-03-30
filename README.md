@@ -1,7 +1,8 @@
 # Expand-and-Quantize : Unsupervised semantic segmentation using high-dimensional space and product quantization
 ## Submission to ICCV 2023 (paper ID : 2668)
 
-### Unsupervised semantic segmentation (USS) aims to discover and recognize meaningful categories without any labels. 
+### Abstract
+Unsupervised semantic segmentation (USS) aims to discover and recognize meaningful categories without any labels. 
 For a successful USS, two key abilities are required: 1) information compression and 2) clustering capability.
 Previous methods have relied on feature dimension reduction for information compression, however, this approach may hinder the process of clustering.
 In this paper, we propose a novel USS framework called Expand-and-Quantize Unsupervised Semantic Segmentation (EQUSS), which combines the benefits of high-dimensional spaces for better clustering and product quantization for effective information compression.

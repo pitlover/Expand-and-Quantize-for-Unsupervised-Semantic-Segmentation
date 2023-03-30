@@ -18,6 +18,8 @@ The expansion head E first expands the feature extracted from the backbone into 
 Finally, this output is used for clustering and linear probing during the evaluation. 
 
 ### Experiment
+<img width="377" alt="스크린샷 2023-03-30 오후 11 49 44" src="https://user-images.githubusercontent.com/49435880/228875855-ff942180-dc31-45c2-944d-6832302208d5.png">
+<img width="380" alt="스크린샷 2023-03-30 오후 11 49 50" src="https://user-images.githubusercontent.com/49435880/228875881-3bbae9ae-2047-45bc-9c9b-f00772a6bfb5.png">
 
 
 ### Analysis

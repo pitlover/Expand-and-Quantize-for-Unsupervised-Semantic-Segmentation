@@ -23,3 +23,6 @@ Finally, this output is used for clustering and linear probing during the evalua
 
 
 ### Analysis
+<img width="788" alt="스크린샷 2023-03-30 오후 11 50 17" src="https://user-images.githubusercontent.com/49435880/228876043-e298a4a1-ff1b-444c-a3eb-1045f75e706b.png">
+
+Analyses on EQUSS. (a) Per-class entropy of EQUSS and STEGO [21] (b) Frequency of each codeword to be selected, along with its corresponding codebook (c) Relationship between entropy and accuracy. Yellow points with particularly low accuracy correspond to the most infrequent classes (0.1% and 0.2%) (d) Inter-class distance between the combination of codewords. The darker the color, the closer the distance.

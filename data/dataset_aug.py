@@ -21,7 +21,7 @@ def get_transform(res: int, is_label: bool, crop_type: str, is_aug: bool = False
         cropper = T.CenterCrop(res)
     elif crop_type == "random":
         cropper = T.RandomCrop(res)
-    elif crop_type is None:
+    elif crop_type == None or crop_type == "none":
         cropper = T.Lambda(lambda x: x)
         res = (res, res)
     else:
@@ -328,6 +328,63 @@ class CroppedDataset(Dataset):
         return image, img_aug, label, mask, image_path
 
 
+class Pascal(Dataset):
+    def __init__(self,
+                 mode: str,
+                 data_dir: str,
+                 sample_range=None,
+                 transform=None,
+                 target_transform=None,
+                 aug_transform=None,
+                 num_samples=None):
+        assert mode in ["train", "val"]
+
+        self.mode = mode
+        self.data_dir = data_dir
+        self.n_things = 20
+        self.n_stuff = 0
+        self.transform = transform
+        self.target_transform = target_transform
+        self.aug_transform = aug_transform
+        self.num_samples = num_samples
+        self.anno_type = 'SegmentationClass'
+
+        self.samples = []
+        with open(os.path.join(self.data_dir, 'ImageSets', 'Segmentation', self.mode + '.txt')) as f:
+            samples_tmp = f.readlines()
+        samples_tmp = list(map(lambda elem: elem.strip(), samples_tmp))
+        self.samples.extend(samples_tmp)
+
+        self.samples_list = []
+        for sample in self.samples:
+            img = f'JPEGImages/{str(sample)}.jpg'
+            label = f'{self.anno_type}/{str(sample)}.png'
+
+            sample = {
+                'images': img,
+                'labels': label
+            }
+            self.samples_list.append(sample)
+
+    def __len__(self):
+        return len(self.samples_list)
+
+    def __getitem__(self, idx):
+        images = self.samples_list[idx]['images']
+        labels = self.samples_list[idx]["labels"]
+        sample_name = images.split('/')[1].split('.')[0]
+
+        # images
+        img = self.transform(Image.open(os.path.join(self.data_dir, images)).convert('RGB'))
+        aug_img = self.aug_transform(Image.open(os.path.join(self.data_dir, images)).convert('RGB'))
+        labels = self.target_transform(Image.open(os.path.join(self.data_dir, labels)))
+        labels[labels == 255] = -1
+
+        mask = (labels > 0).to(torch.float32)
+
+        return img, aug_img, labels, mask, sample_name
+
+
 class UnSegDataset(Dataset):
     def __init__(self,
                  mode: str,  # train, val
@@ -372,7 +429,6 @@ class UnSegDataset(Dataset):
             extra_args = dict(coarse_labels=False, subset=7, exclude_things=True)
         elif dataset_name == "cocostuff27" and crop_type is not None:
             # common training00
-
             self.n_classes = 27
             dataset_class = CroppedDataset
             extra_args = dict(dataset_name="cocostuff27", crop_type=crop_type, crop_ratio=crop_ratio)
@@ -383,6 +439,10 @@ class UnSegDataset(Dataset):
             extra_args = dict(coarse_labels=False, subset=None, exclude_things=False)
             if mode == "val":
                 extra_args["subset"] = 7  # noqa
+        elif dataset_name == "pascal":
+            self.n_classes = 20
+            dataset_class = Pascal
+            extra_args = dict()
         else:
             raise ValueError("Unknown dataset: {}".format(dataset_name))
 
@@ -418,8 +478,11 @@ class UnSegDataset(Dataset):
             aug_transform=aug_transform,
             **extra_args
         )
-
-        feature_cache_file = join(f"../Datasets/{dataset_name}", "nns",
+        if "cocostuff" in dataset_name:
+            dataset_name_ = "cocostuff27"
+        else:
+            dataset_name_ = dataset_name
+        feature_cache_file = join(f"../Datasets/{dataset_name_}", "nns",
                                   f"nns_{model_type}_{dataset_name}_{mode}_{crop_type}_224.npz")
 
         if self.pos_labels or self.pos_images:

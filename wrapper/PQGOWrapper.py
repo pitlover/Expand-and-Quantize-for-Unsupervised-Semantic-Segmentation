@@ -100,4 +100,4 @@ class PQGOWrapper(nn.Module):
 
         total_loss = model_loss + linear_loss + cluster_loss
 
-        return total_loss, output, (linear_preds, cluster_preds), z_quantized_index
+        return total_loss, output, (linear_preds, cluster_preds), feat_vqs

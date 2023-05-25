@@ -5,6 +5,7 @@ import torch.nn.functional as F  # noqa
 
 from model.dino.dino_featurizer import DinoFeaturizer
 from model.loss import STEGOLoss
+import time
 
 
 class DINOStego(nn.Module):
@@ -55,6 +56,11 @@ class DINOStego(nn.Module):
             dino_feat_pos = self.dropout(dino_feat_pos)
             code_pos = self.cluster1(dino_feat_pos)
             code_pos += self.cluster2(dino_feat_pos)
-
+            torch.cuda.synchronize()
+            start_time = time.time()
             output["stego-loss"] = self.corr_loss(dino_feat, dino_feat_pos, code, code_pos)
+            torch.cuda.synchronize()
+            end_time = time.time() - start_time
+            output["end_time"] = end_time
+            # print(end_time)
         return dino_feat, code, output

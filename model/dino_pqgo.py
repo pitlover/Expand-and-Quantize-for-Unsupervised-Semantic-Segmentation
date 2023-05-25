@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
-
+import time
 from model.dino import DinoFeaturizer
 
 from utils.dist_utils import all_reduce_tensor
@@ -39,6 +39,7 @@ class DIONPQGO(nn.Module):
         self.vq_num_codebooks = vq_num_codebooks[0]
         self.num_vq = len(vq_num_codebooks)
         self.beta = cfg["vq"]["beta"]
+        self.book = cfg["vq"]["book"]
         self.vq_type = cfg["vq"]["vq_type"]
         self.normalize = cfg["vq"].get("normalize", "none")
         self.use_weighted_sum = cfg["vq"].get("use_weighted_sum", False)
@@ -52,6 +53,7 @@ class DIONPQGO(nn.Module):
         self.num_pos = cfg_loss["jsd"].get("num_pos", 10)
         self.n_kmeans = cfg["vq"].get("n_kmeans", 1)
         vq_kwargs = dict(beta=self.beta,
+                         book=self.book,
                          normalize=self.normalize,
                          use_restart=self.use_restart,
                          use_split=self.use_split,
@@ -91,7 +93,7 @@ class DIONPQGO(nn.Module):
         # -------- loss -------- #
         self.stego_loss = STEGOLoss(cfg=self.cfg_loss["stego"])
 
-    def additional_linear(self, ):   # TODO addadd
+    def additional_linear(self, ):  # TODO addadd
         return torch.nn.Sequential(
             torch.nn.ReLU(),
             torch.nn.Conv2d(self.hidden_dim, self.hidden_dim, (1, 1)),
@@ -135,16 +137,18 @@ class DIONPQGO(nn.Module):
         else:
             code_pos = None  # placeholder
 
-        # # TODO grouping
-        # code = self.grouping(code)
-
         quantized_feat, (z_split, z_quantized, z_quantized_index), outputs, distance_prob = self.vq_blocks[0](code,
                                                                                                               code_pos,
                                                                                                               it=it)  # (2b, hidden_dim, h, w)
-
         if self.training:
             # TODO vq part -> need remove
+            torch.cuda.synchronize()
+            start_time = time.time()
             outputs["stego-loss"] = self.stego_loss(dino_feat, dino_feat_pos, code, code_pos)
+            torch.cuda.synchronize()
+            end_time = time.time() - start_time
+            outputs["end_time"] = end_time
+            # print(end_time)
         z_quantized_index = torch.stack(z_quantized_index, dim=0)  # (num_pq, b, h, w)
 
         return code, quantized_feat, (z_split, z_quantized, z_quantized_index), outputs
@@ -395,6 +399,7 @@ class EMACodebook(nn.Module):
             2 * (torch.matmul(z_norm, codebook_norm.t()))  # (2bhw, n_prototypes)
 
         min_encoding_indices = torch.argmin(d, dim=1)
+
         distance_prob = F.softmax(-d / self.jsd_ts, dim=1)  # (2bhw, n_prototypes)
         vq_indices = torch.argmin(d, dim=1)
 
@@ -457,10 +462,12 @@ class Codebook(nn.Module):
                  num_codebook_vectors: int,
                  latent_dim: int,
                  beta=0.25,
+                 book=1.0,
                  normalize: str = "none",
                  use_restart: bool = False,
                  use_split: bool = False,
                  use_weighted_sum: bool = False,
+                 use_gumbel: bool = False,
                  need_initialized: str = "kmeans",
                  pq_dropout: float = 0.0,
                  jsd_ts: float = 1.0,
@@ -477,7 +484,9 @@ class Codebook(nn.Module):
         # self.num_codebook_vectors = args.num_codebook_vectors
         self.latent_dim = latent_dim
         self.beta = beta
+        self.book = book
         self.use_weighted_sum = use_weighted_sum
+        self.use_gumbel = use_gumbel
         self.pq_dropout = pq_dropout
         self.num_codebook_vectors = num_codebook_vectors
         self.embedding = nn.Embedding(num_codebook_vectors, latent_dim)
@@ -490,14 +499,16 @@ class Codebook(nn.Module):
         self.normalize = normalize
         if self.use_weighted_sum:
             assert self.normalize == "none", "Weight_sum should be unnormalized"
+
+        if self.use_gumbel:
+            assert self.use_weighted_sum == True, "Weight_sum and Gumbel should not be both true"
+
         if normalize == "z_trainable":
             self.z_mean = nn.Parameter(torch.zeros(self.latent_dim))
             self.z_log_var = nn.Parameter(torch.zeros(self.latent_dim))
         self.use_restart = use_restart
         self.use_split = use_split
         self.need_initialized = need_initialized
-        # ----- JSD ------ #
-        # self.posjsd_loss = JSDPosLoss(num_query=num_query, num_pos=num_pos)
         self.jsd_ts = jsd_ts
 
     @torch.no_grad()
@@ -646,6 +657,10 @@ class Codebook(nn.Module):
         vq_indices = torch.argmin(d, dim=1)
         if self.use_weighted_sum:
             z_q = torch.matmul(distance_prob, codebook_norm)  # TODO check temperature scaling
+        elif self.use_gumbel:  # TODO Gumbel
+            gumbel_distance = F.gumbel_softmax(-d, tau=1.0, hard=True, dim=1)
+            vq_indices = torch.argmax(gumbel_distance, dim=1)
+            z_q = self.embedding(vq_indices)
         else:
             z_q = self.embedding(min_encoding_indices)
 
@@ -669,7 +684,7 @@ class Codebook(nn.Module):
         # compute loss for embedding
         codebook_loss = F.mse_loss(z_q, z_norm.detach())  # make codebook to be similar to input
         commitment_loss = F.mse_loss(z_norm, z_q.detach())  # make input to be similar to codebook
-        q_loss = codebook_loss + self.beta * commitment_loss
+        q_loss = self.book * codebook_loss + self.beta * commitment_loss
 
         if not self.use_weighted_sum:
             z_q = z_norm + (z_q - z_norm).detach()
@@ -697,6 +712,7 @@ class ProductQuantizerWrapper(nn.Module):
                  num_codebook: int,
                  embed_dim: int,
                  beta: float = 0.25,  # commitment loss
+                 book: float = 1.0,
                  normalize: Optional[str] = None,
                  decay: float = 0.99,
                  eps: float = 1e-5,
@@ -719,7 +735,7 @@ class ProductQuantizerWrapper(nn.Module):
         self.pq_dim = embed_dim // num_pq
 
         self.quantizers = nn.ModuleList([
-            quantizer_cls(num_codebook, self.pq_dim, beta=beta, normalize=normalize, use_restart=use_restart,
+            quantizer_cls(num_codebook, self.pq_dim, beta=beta, book=book, normalize=normalize, use_restart=use_restart,
                           use_split=use_split,
                           use_weighted_sum=use_weighted_sum, need_initialized=need_initialized, pq_dropout=pq_dropout,
                           jsd_ts=jsd_ts, num_query=num_query, num_pos=num_pos)

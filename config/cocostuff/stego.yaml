@@ -2,16 +2,16 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_flops"
+  name: "STEGO_class15"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
 
 # ---------------------------------------------------------------- #
 seed: 10
-num_classes: 3                          # TODO need to fix per dataset
-dataset_name: "potsdam"                     # "potsdam", "cityscapes", "cocostuff27"
-data_dir: "../Datasets/potsdam"
+num_classes: 15                      # TODO need to fix per dataset
+dataset_name: "cocostuff15"                     # "potsdam", "cityscapes", "cocostuff27", "cocostuff3", "cocostuff15"
+data_dir: "../Datasets/cocostuff27"
 is_visualize: false                           # default false, true
 visualize_path: "./visualize/stego_jy"
 # ---------------------------------------------------------------- #
@@ -20,7 +20,7 @@ resume:
 # ---------------------------------------------------------------- #
 model:
   pretrained:
-    model_type: "vit_base" # "vit_small" "vit_base"
+    model_type: "vit_small" # "vit_small" "vit_base"
     dino_patch_size: 8
     freeze_backbone: true
     drop_prob: 0.1
@@ -33,12 +33,12 @@ model:
 loss:
   stego_weight: 1.0
   # cocostuff27 with vit-small
-#  neg_inter_weight: 0.63
-#  pos_inter_weight: 0.25
-#  pos_intra_weight: 0.67
-#  neg_inter_shift: 0.66
-#  pos_inter_shift: 0.02
-#  pos_intra_shift: 0.08
+  neg_inter_weight: 0.63
+  pos_inter_weight: 0.35
+  pos_intra_weight: 0.67
+  neg_inter_shift: 0.63
+  pos_inter_shift: 0.12
+  pos_intra_shift: 0.18
 
   # cocostuff27 with vit-base
   #  neg_inter_weight: 0.15
@@ -65,12 +65,12 @@ loss:
 #  pos_intra_shift: 0.39
 
   # potsdam with vit-base
-  neg_inter_weight: 0.63
-  pos_inter_weight: 0.25
-  pos_intra_weight: 0.67
-  neg_inter_shift: 0.26
-  pos_inter_shift: 0.12
-  pos_intra_shift: 0.21
+  #  neg_inter_weight: 0.63
+  #  pos_inter_weight: 0.25
+  #  pos_intra_weight: 0.67
+  #  neg_inter_shift: 0.26
+  #  pos_inter_shift: 0.12
+  #  pos_intra_shift: 0.21
 
   #  neg_inter_weight: 0.63
   #  pos_inter_weight: 0.25
@@ -91,7 +91,7 @@ dataset:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
     model_type: ${model.pretrained.model_type}
-    crop_type: "five"
+    crop_type: "none"
     crop_ratio: 0.5
     loader_crop_type: "center"
     num_neighbors: 7
@@ -141,7 +141,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 15
+  max_epochs: 3
   print_interval_iters: 25
   valid_interval_iters: 75
   clip_grad: 10.0

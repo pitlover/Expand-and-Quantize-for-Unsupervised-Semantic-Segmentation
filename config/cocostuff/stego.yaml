@@ -2,7 +2,7 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "STEGO_class15"
+  name: "STEGO_5_4_7"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
@@ -33,11 +33,11 @@ model:
 loss:
   stego_weight: 1.0
   # cocostuff27 with vit-small
-  neg_inter_weight: 0.63
-  pos_inter_weight: 0.35
-  pos_intra_weight: 0.67
-  neg_inter_shift: 0.63
-  pos_inter_shift: 0.12
+  neg_inter_weight: 0.15
+  pos_inter_weight: 1.0
+  pos_intra_weight: 0.1
+  neg_inter_shift: 0.23
+  pos_inter_shift: 0.02
   pos_intra_shift: 0.18
 
   # cocostuff27 with vit-base
@@ -141,7 +141,7 @@ eval:
 
 # ---------------------------------------------------------------- #
 train:
-  max_epochs: 3
+  max_epochs: 1
   print_interval_iters: 25
   valid_interval_iters: 75
   clip_grad: 10.0

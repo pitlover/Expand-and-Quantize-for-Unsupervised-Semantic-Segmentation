@@ -2,20 +2,20 @@ save_dir: "output"
 wandb:
   project: "Jigmentation"
   mode: "online"
-  name: "PQGO_gumbel_cocostuff27"
+  name: "PQGO_256_32*32"
   notes: ""
   tags_dataset: ${dataset_name}
   tags_model: ${model.pretrained.model_type}
 # ---------------------------------------------------------------- #
 seed: 10
-num_classes: 27                          # TODO need to fix per dataset
-dataset_name: "cocostuff27"                     # "pascal", "potsdam", "cityscapes", "cocostuff27", "cocostuff3", "cocostuff15"
+num_classes: 15                         # TODO need to fix per dataset
+dataset_name: "cocostuff15"                     # "pascal", "potsdam", "cityscapes", "cocostuff27", "cocostuff3", "cocostuff15"
 data_dir: "../Datasets/cocostuff27"
 is_visualize: false                           # default false, true
 visualize_path: "./visualize/tmp/crfX"
 # ---------------------------------------------------------------- #
 resume:
-  checkpoint: "./"                      # default null
+  checkpoint: null                  # default null
 
 # ---------------------------------------------------------------- #
 model:
@@ -35,16 +35,16 @@ model:
     embed_dims: [ 1024 ]
     beta: 0.25
     book: 1.0
-    normalize: "none"                           # l2, z_norm, z_trainable, none
+    normalize: "l2"                           # l2, z_norm, z_trainable, none
     use_restart: false                        # default false, true
     use_split: false                        # default false, true
     use_weighted_sum: false                   # default false, true
-    use_gumbel: true                   # default false, true
+    use_gumbel: false                   # default false, true
     need_initialized: "uni"                   # default none : kmeans, uni, normal, rand
     pq_dropout: 0.0                         # default(ratio of pq mask) : 0.0,
     decay: 0.99
     eps: 1.0e-6
-    num_pq: [ 64 ]             # 64               # 1 for vq
+    num_pq: [ 32 ]             # 64               # 1 for vq
     agg_type: "concat"                        # add, concat
 
 # ---------------------------------------------------------------- #
@@ -67,20 +67,20 @@ loss:
     temperature: 0.1 # TODO need check
   stego:
     # cocostuff27 with vit-small
-    neg_inter_weight: 0.63
-    pos_inter_weight: 0.25
-    pos_intra_weight: 0.67
-    neg_inter_shift: 0.66
+    neg_inter_weight: 0.53
+    pos_inter_weight: 0.45
+    pos_intra_weight: 0.47
+    neg_inter_shift: 0.23
     pos_inter_shift: 0.02
-    pos_intra_shift: 0.08
+    pos_intra_shift: 0.18
 
     # cocostuff27 with vit-base
-#    neg_inter_weight: 0.15
-#    pos_inter_weight: 1
-#    pos_intra_weight: 0.1
-#    neg_inter_shift: 1.
-#    pos_inter_shift: 0.2
-#    pos_intra_shift: 0.1
+    #    neg_inter_weight: 0.15
+    #    pos_inter_weight: 1
+    #    pos_intra_weight: 0.1
+    #    neg_inter_shift: 1.
+    #    pos_inter_shift: 0.2
+    #    pos_intra_shift: 0.1
 
     # cityscapes with vit-small
     #        neg_inter_weight: 0.95
@@ -128,7 +128,7 @@ dataset:
     data_dir: ${data_dir}
     dataset_name: ${dataset_name}
     model_type: ${model.pretrained.model_type}
-    crop_type: "five"                 # null, "five"
+    crop_type: "none"                 # null, "five"
     crop_ratio: 0.5
     loader_crop_type: "center"
     num_neighbors: 7

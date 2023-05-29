@@ -229,41 +229,41 @@ def valid_epoch(
     count = 0
     saved_data = defaultdict(list)
 
-    if cfg["is_visualize"]:
-        os.makedirs(cfg["visualize_path"], exist_ok=True)
-
-    from npy_append_array import NpyAppendArray
-
-    pq_num = "equss"
-    f_data = NpyAppendArray(f'./index/{pq_num}/data_1.npy')
-    f_label = NpyAppendArray(f'./index/{pq_num}/label_1.npy')
-
-    f_data2 = NpyAppendArray(f'./index/{pq_num}/data_2.npy')
-    f_label2 = NpyAppendArray(f'./index/{pq_num}/label_2.npy')
-
-    f_data3 = NpyAppendArray(f'./index/{pq_num}/data_3.npy')
-    f_label3 = NpyAppendArray(f'./index/{pq_num}/label_3.npy')
-
-    f_data4 = NpyAppendArray(f'./index/{pq_num}/data_4.npy')
-    f_label4 = NpyAppendArray(f'./index/{pq_num}/label_4.npy')
-
-    f_data5 = NpyAppendArray(f'./index/{pq_num}/data_5.npy')
-    f_label5 = NpyAppendArray(f'./index/{pq_num}/label_5.npy')
-
-    f_data6 = NpyAppendArray(f'./index/{pq_num}/data_6.npy')
-    f_label6 = NpyAppendArray(f'./index/{pq_num}/label_6.npy')
-
-    f_data7 = NpyAppendArray(f'./index/{pq_num}/data_7.npy')
-    f_label7 = NpyAppendArray(f'./index/{pq_num}/label_7.npy')
-
-    f_data8 = NpyAppendArray(f'./index/{pq_num}/data_8.npy')
-    f_label8 = NpyAppendArray(f'./index/{pq_num}/label_8.npy')
-
-    f_data9 = NpyAppendArray(f'./index/{pq_num}/data_9.npy')
-    f_label9 = NpyAppendArray(f'./index/{pq_num}/label_9.npy')
-
-    f_data10 = NpyAppendArray(f'./index/{pq_num}/data_10.npy')
-    f_label10 = NpyAppendArray(f'./index/{pq_num}/label_10.npy')
+    # if cfg["is_visualize"]:
+    #     os.makedirs(cfg["visualize_path"], exist_ok=True)
+    #
+    # from npy_append_array import NpyAppendArray
+    #
+    # pq_num = "equss"
+    # f_data = NpyAppendArray(f'./index/{pq_num}/data_7.npy')
+    # f_label = NpyAppendArray(f'./index/{pq_num}/label_7.npy')
+    #
+    # f_data2 = NpyAppendArray(f'./index/{pq_num}/data_8.npy')
+    # f_label2 = NpyAppendArray(f'./index/{pq_num}/label_8.npy')
+    #
+    # f_data3 = NpyAppendArray(f'./index/{pq_num}/data_9.npy')
+    # f_label3 = NpyAppendArray(f'./index/{pq_num}/label_9.npy')
+    #
+    # f_data4 = NpyAppendArray(f'./index/{pq_num}/data_10.npy')
+    # f_label4 = NpyAppendArray(f'./index/{pq_num}/label_10.npy')
+    #
+    # f_data5 = NpyAppendArray(f'./index/{pq_num}/data_11.npy')
+    # f_label5 = NpyAppendArray(f'./index/{pq_num}/label_11.npy')
+    #
+    # f_data6 = NpyAppendArray(f'./index/{pq_num}/data_12.npy')
+    # f_label6 = NpyAppendArray(f'./index/{pq_num}/label_12.npy')
+    #
+    # f_data7 = NpyAppendArray(f'./index/{pq_num}/data_7.npy')
+    # f_label7 = NpyAppendArray(f'./index/{pq_num}/label_7.npy')
+    #
+    # f_data8 = NpyAppendArray(f'./index/{pq_num}/data_8.npy')
+    # f_label8 = NpyAppendArray(f'./index/{pq_num}/label_8.npy')
+    #
+    # f_data9 = NpyAppendArray(f'./index/{pq_num}/data_9.npy')
+    # f_label9 = NpyAppendArray(f'./index/{pq_num}/label_9.npy')
+    #
+    # f_data10 = NpyAppendArray(f'./index/{pq_num}/data_10.npy')
+    # f_label10 = NpyAppendArray(f'./index/{pq_num}/label_10.npy')
 
     for it, data in enumerate(dataloader):
         # -------------------------------- data -------------------------------- #
@@ -281,50 +281,52 @@ def valid_epoch(
         linear_m.update(linear_preds.to(device), label)
 
         #############
-        import torch.nn.functional as F
-        # out (b, c, h // 8, w // 8)
-        z_quantized_index = F.interpolate(z_quantized_index.float(), size=label.shape[-2:], mode="nearest")
-        b, c, h, w = z_quantized_index.shape  # (8, 64, 320, 320)
-        z_quantized_index = z_quantized_index.view(b, c, -1).permute(0, 2, 1)  # (8, 320*320, 64)
-
-        label_ = label.view(b, -1).contiguous()  # (8, 320*320)
-        print(it)
-
-        if it < 2:
-            f_data.append(z_quantized_index.cpu().numpy())
-            f_label.append(label_.cpu().numpy())
-        elif it < 4:
-            f_data2.append(z_quantized_index.cpu().numpy())
-            f_label2.append(label_.cpu().numpy())
-        elif it < 6:
-            f_data3.append(z_quantized_index.cpu().numpy())
-            f_label3.append(label_.cpu().numpy())
-        elif it < 8:
-            f_data4.append(z_quantized_index.cpu().numpy())
-            f_label4.append(label_.cpu().numpy())
-        elif it < 10:
-            f_data5.append(z_quantized_index.cpu().numpy())
-            f_label5.append(label_.cpu().numpy())
-        elif it < 12:
-            f_data6.append(z_quantized_index.cpu().numpy())
-            f_label6.append(label_.cpu().numpy())
-        else:
-            exit()
-        # elif it < 240:
+        # import torch.nn.functional as F
+        # # out (b, c, h // 8, w // 8)
+        # z_quantized_index = F.interpolate(z_quantized_index.float(), size=label.shape[-2:], mode="nearest")
+        # b, c, h, w = z_quantized_index.shape  # (8, 64, 320, 320)
+        # z_quantized_index = z_quantized_index.view(b, c, -1).permute(0, 2, 1)  # (8, 320*320, 64)
+        #
+        # label_ = label.view(b, -1).contiguous()  # (8, 320*320)
+        # print(it)
+        #
+        # if it < 12:
+        #     continue
+        # if it < 14:
+        #     f_data.append(z_quantized_index.cpu().numpy())
+        #     f_label.append(label_.cpu().numpy())
+        # elif it < 16:
+        #     f_data2.append(z_quantized_index.cpu().numpy())
+        #     f_label2.append(label_.cpu().numpy())
+        # elif it < 18:
+        #     f_data3.append(z_quantized_index.cpu().numpy())
+        #     f_label3.append(label_.cpu().numpy())
+        # elif it < 20:
+        #     f_data4.append(z_quantized_index.cpu().numpy())
+        #     f_label4.append(label_.cpu().numpy())
+        # elif it < 22:
+        #     f_data5.append(z_quantized_index.cpu().numpy())
+        #     f_label5.append(label_.cpu().numpy())
+        # elif it < 24:
         #     f_data6.append(z_quantized_index.cpu().numpy())
         #     f_label6.append(label_.cpu().numpy())
-        # elif it < 280:
-        #     f_data7.append(z_quantized_index.cpu().numpy())
-        #     f_label7.append(label_.cpu().numpy())
-        # elif it < 320:
-        #     f_data8.append(z_quantized_index.cpu().numpy())
-        #     f_label8.append(label_.cpu().numpy())
-        # elif it < 360:
-        #     f_data9.append(z_quantized_index.cpu().numpy())
-        #     f_label9.append(label_.cpu().numpy())
         # else:
-        #     f_data10.append(z_quantized_index.cpu().numpy())
-        #     f_label10.append(label_.cpu().numpy())
+        #     exit()
+        # # elif it < 240:
+        # #     f_data6.append(z_quantized_index.cpu().numpy())
+        # #     f_label6.append(label_.cpu().numpy())
+        # # elif it < 280:
+        # #     f_data7.append(z_quantized_index.cpu().numpy())
+        # #     f_label7.append(label_.cpu().numpy())
+        # # elif it < 320:
+        # #     f_data8.append(z_quantized_index.cpu().numpy())
+        # #     f_label8.append(label_.cpu().numpy())
+        # # elif it < 360:
+        # #     f_data9.append(z_quantized_index.cpu().numpy())
+        # #     f_label9.append(label_.cpu().numpy())
+        # # else:
+        # #     f_data10.append(z_quantized_index.cpu().numpy())
+        # #     f_label10.append(label_.cpu().numpy())
 
         for k, v in output.items():
             if k not in result:

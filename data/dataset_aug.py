@@ -397,7 +397,9 @@ class UnSegDataset(Dataset):
                  res: int = 224,
                  pos_labels: bool = False,
                  pos_images: bool = False,
-                 num_neighbors: int = 5
+                 num_neighbors: int = 5,
+                 transform=None,
+                 target_transform=None,
                  ):
         super().__init__()
         self.mode = mode
@@ -445,9 +447,10 @@ class UnSegDataset(Dataset):
             extra_args = dict()
         else:
             raise ValueError("Unknown dataset: {}".format(dataset_name))
-
-        transform = get_transform(res, is_label=False, crop_type=loader_crop_type)
-        target_transform = get_transform(res, is_label=True, crop_type=loader_crop_type)
+        if transform == None:
+            transform = get_transform(res, is_label=False, crop_type=loader_crop_type)
+        if target_transform == None:
+            target_transform = get_transform(res, is_label=True, crop_type=loader_crop_type)
         aug_transform = get_transform(res, is_label=False, crop_type=loader_crop_type, is_aug=True)
 
         if "train" in mode:

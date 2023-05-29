@@ -5,6 +5,8 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.functional as F
+from sklearn.preprocessing import normalize
+from sklearn.metrics.pairwise import cosine_similarity
 
 # total_result = np.load("./index/final/book_0.npy")
 # # total_result = total_result.T  # (27, 256) -> (256, 27)
@@ -22,7 +24,65 @@ import torch.functional as F
 num = 1000
 dim = 1024
 file_name = f"equss"
-for i in range(6, 7):
+
+# data = np.load(f"./index/{file_name}/final/class_norm_mean_distance_{num}.npy")
+# print(data.shape)
+# fig = plt.figure(figsize=(10, 10))
+# ax = fig.gca()
+# # hist /= torch.clamp_min(hist.sum(dim=0, keepdim=True), 1)
+# # sns.heatmap(data, ax=ax, vmin=-1, vmax=1, cmap="YlGnBu", cbar=False)
+# sns.heatmap(data, ax=ax, vmin=-1, vmax=1, cmap="dark:salmon_r", cbar=False)
+# # sns.heatmap(data, ax=ax, cmap="Blues", linewidths=0.5, linecolor="gray", cbar=False)
+# plt.savefig(f"./index/{file_name}/final/norm_matrix.png")
+# exit()
+
+# # raw cosine similarity ver.
+# results = np.zeros((27, 27))
+# total_result = np.load(f"./index/{file_name}/final/ffinal_quantized_features_new_{num}.npy")  # (27, 10000, dim)
+# print(total_result.shape)
+# for a in range(27):
+#     for b in range(27):
+#         print(f"---------------{a}-{b}------------------")
+#         comp_A = total_result[a]
+#         comp_B = total_result[b]
+#         sim = cosine_similarity(comp_A, comp_B)
+#         mean_A_B = np.mean(sim)
+#         print(sim, sim.shape, mean_A_B)
+#         results[a][b] = mean_A_B
+# np.save(f"./index/{file_name}/final/class_mean_distance_{num}.npy", results)
+# # results = results / results.sum(axis=1, keepdims=True)
+# # results = np.square(results)
+# fig = plt.figure(figsize=(10, 10))
+# ax = fig.gca()
+# # hist /= torch.clamp_min(hist.sum(dim=0, keepdim=True), 1)
+# sns.heatmap(results, ax=ax, vmin=-1, vmax=1, cmap="YlGnBu", cbar=False)
+# # sns.heatmap(results, ax=ax, vmin=-1, vmax=1, cmap="YlGnBu", cbar=False)
+# # sns.heatmap(results, ax=ax, vmin=0, vmax=1, cmap="Blues", cbar=False)
+# # sns.heatmap(total_result, ax=ax, cmap="Blues", linewidths=0.5, linecolor="gray", cbar=False)
+# np.save(f"./index/{file_name}/final/class_norm_mean_distance_{num}.npy", results)
+# plt.savefig(f"./index/{file_name}/final/norm_matrix.png")
+# print(results)
+# exit()
+# data1 = np.load("./index/equss/final/quantized_features_new_1000_3.npy", allow_pickle=True)
+# data2 = np.load("./index/equss/final/quantized_features_new_1000_6.npy", allow_pickle=True)
+# data3 = np.load("./index/equss/final/quantized_features_new_1000_1.npy", allow_pickle=True)
+# data4 = np.load("./index/equss/final/quantized_features_new_1000_4.npy", allow_pickle=True)
+# data5 = np.load("./index/equss/final/quantized_features_new_1000_2.npy", allow_pickle=True)
+# data6 = np.load("./index/equss/final/quantized_features_new_1000_5.npy", allow_pickle=True)
+#
+# import random
+#
+# result = []
+# for idx, (a, b, c, d, e, f) in enumerate(zip(data1, data2, data3, data4, data5, data6)):
+#     print(idx, len(a), len(b), len(c), len(d), len(e), len(f))
+#     data = a + b + c + d + e + f
+#     random.shuffle(data)
+#     result.append(data[:num])
+#
+# np.save(f"./index/{file_name}/final/ffinal_quantized_features_new_{num}.npy", result)
+# exit()
+
+for i in range(7, 8):
     label = np.load(f"./index/{file_name}/label_{i}.npy")  # (240, 102400)
     data = np.load(f"./index/{file_name}/data_{i}.npy")  # (240, 102400, dim)
     print("*** Load npy ***")
@@ -32,7 +92,8 @@ for i in range(6, 7):
     datas = np.concatenate((label, data), axis=-1)  # (240 * 102400, 1 + dim)
     print(datas.shape)
     np.random.shuffle(datas)
-    total_result = [[[0 for col in range(dim)] for row in range(num)] for depth in range(27)]
+    # total_result = [[[0 for col in range(dim)] for row in range(num)] for depth in range(27)]
+    total_result = [[] for depth in range(27)]
     class_count = [0 for _ in range(27)]
 
     for idx in tqdm(datas):
@@ -41,68 +102,14 @@ for i in range(6, 7):
         if cls == 255:
             continue
         if class_count[cls] < num:
-            total_result[cls][class_count[cls]] = idx[1:]
+            # total_result[cls][class_count[cls]] = idx[1:]
+            total_result[cls].append(np.array(idx[1:]))
+            # total_result[cls].append(np.array(idx[1:]))
             class_count[cls] += 1
+    total_result = np.array(total_result, dtype=object)
     print(class_count)
-    np.save(f"./index/{file_name}/final/quantized_features_{num}_{i}.npy", total_result)
+    np.save(f"./index/{file_name}/final/quantized_features_new_{num}_{i}.npy", total_result)
     exit()
-
-    # raw cosine similarity ver.
-    results = np.zeros((27, 27))
-    norm_results = np.zeros((27, 27))
-    data = np.load(f"./index/{file_name}/final/quantized_features_{num}.npy")  # (27, 10000, dim)
-    print(data.shape)
-    for a in range(27):
-        for b in range(27):
-            print(f"---------------{a}-{b}------------------")
-            comp_A = total_result[a]
-            comp_B = total_result[b]
-
-            num = np.dot(comp_A, comp_B.T)
-            p1 = np.sqrt(np.sum(comp_A ** 2, axis=1))[:np.newaxis]
-            p2 = np.sqrt(np.sum(comp_B ** 2, axis=1))[np.newaxis:]
-            tmp = num / (p1 * p2)
-            print(tmp, tmp.shape)
-            mean_A_B = np.mean(tmp)
-            print(mean_A_B, mean_A_B.shape)
-            exit()
-
-            norm_comp_A = F.normalize(comp_A, dim=-1)
-            norm_comp_B = F.normalize(comp_B, dim=-1)
-            print(norm_comp_A.shape, norm_comp_B.shape)
-
-            norm_num = np.dot(norm_comp_A, norm_comp_B.T)
-            norm_p1 = np.sqrt(np.sum(norm_comp_A ** 2, axis=1))[:np.newaxis]
-            norm_p2 = np.sqrt(np.sum(norm_comp_B ** 2, axis=1))[np.newaxis:]
-            norm_tmp = norm_num / (norm_p1 * norm_p2)
-            print(norm_tmp, norm_tmp.shape)
-            norm_mean_A_B = np.mean(norm_tmp)
-            print(norm_mean_A_B, norm_mean_A_B.shape)
-            exit()
-            norm_results[a][b] = norm_mean_A_B
-
-    np.save(f"./index/{file_name}/final/class_norm_mean_distance_{num}.npy", results)
-    np.save(f"./index/{file_name}/final/class_norm_norm_mean_distance_{num}.npy", norm_results)
-    results = results / results.sum(axis=1, keepdims=True)
-    norm_results = norm_results / norm_results.sum(axis=1, keepdims=True)
-    # results = np.square(results)
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.gca()
-    # hist /= torch.clamp_min(hist.sum(dim=0, keepdim=True), 1)
-    sns.heatmap(results, ax=ax, vmin=0, vmax=1, cmap="YlGnBu", cbar=False)
-    # sns.heatmap(results, ax=ax, vmin=0, vmax=1, cmap="Blues", cbar=False)
-    # sns.heatmap(total_result, ax=ax, cmap="Blues", linewidths=0.5, linecolor="gray", cbar=False)
-    plt.savefig(f"./index/{file_name}/final/norm_matrix_{i}.png")
-    np.save(f"./index/{file_name}/final/class_mean_distance_{num}.npy", results)
-
-    fig2 = plt.figure(figsize=(10, 10))
-    ax2 = fig2.gca()
-    # hist /= torch.clamp_min(hist.sum(dim=0, keepdim=True), 1)
-    sns.heatmap(norm_results, ax=ax2, vmin=0, vmax=1, cmap="YlGnBu", cbar=False)
-    # sns.heatmap(results, ax=ax, vmin=0, vmax=1, cmap="Blues", cbar=False)
-    # sns.heatmap(total_result, ax=ax, cmap="Blues", linewidths=0.5, linecolor="gray", cbar=False)
-    plt.savefig(f"./index/{file_name}/final/norm_norm_matrix_{i}.png")
-    np.save(f"./index/{file_name}/final/class_mean_norm_distance_{num}.npy", norm_results)
 
     # edit-distance ver.
     # results = np.zeros((27, 27))

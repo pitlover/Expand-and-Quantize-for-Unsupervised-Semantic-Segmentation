@@ -7,6 +7,7 @@ __all__ = [
     "default_parser",
     "load_config",
     "override_config_by_cli",
+    "override_config_by_cli",
     "resolve_config",
 ]
 

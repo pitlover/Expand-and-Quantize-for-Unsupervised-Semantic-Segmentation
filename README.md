@@ -1,5 +1,5 @@
-# Expand-and-Quantize : Unsupervised semantic segmentation using high-dimensional space and product quantization
-## Submission to ICCV 2023
+# Official code for Expand-and-Quantize : Unsupervised semantic segmentation using high-dimensional space and product quantization
+## AAAI 2024
 
 ### Abstract
 <img width="640" alt="스크린샷 2023-03-30 오후 11 46 03" src="https://user-images.githubusercontent.com/49435880/228874578-865030fb-d71d-472a-9843-666d1383516e.png">
